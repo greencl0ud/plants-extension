@@ -16,12 +16,12 @@ export const assets = {
 describe('message boundaries', () => {
   it('accepts supported commands and responses', () => {
     expect(isWebviewMessage({ type: 'ready' })).toBe(true);
-    expect(isWebviewMessage({ type: 'selectPlant', plantId: 'stringle' })).toBe(true);
-    expect(isShelfMessage({ type: 'shelfState', plantId: null, plant: null })).toBe(true);
-    expect(isShelfMessage({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } })).toBe(true);
+    expect(isWebviewMessage({ type: 'addPlant', plantId: 'stringle' })).toBe(true);
+    expect(isShelfMessage({ type: 'shelfState', plants: [] })).toBe(true);
+    expect(isShelfMessage({ type: 'shelfState', plants: [{ id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } }] })).toBe(true);
     expect(isShelfMessage({ type: 'saveError' })).toBe(true);
   });
-  it.each([null, [], {}, 'ready', { type: 'unknown' }, { type: 'selectPlant', plantId: 'dangleleaf' }, { type: 'shelfState' }])('rejects malformed payload %j', (value) => {
+  it.each([null, [], {}, 'ready', { type: 'unknown' }, { type: 'addPlant', plantId: 'dangleleaf' }, { type: 'shelfState' }])('rejects malformed payload %j', (value) => {
     expect(isWebviewMessage(value)).toBe(false);
     expect(isShelfMessage(value)).toBe(false);
   });
@@ -47,5 +47,12 @@ it.each([
   { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 500 } },
   null,
 ])('rejects invalid plant metadata %j', plant => {
-  expect(isShelfMessage({ type: 'shelfState', plantId: 'stringle', plant })).toBe(false);
+  expect(isShelfMessage({ type: 'shelfState', plants: [plant] })).toBe(false);
+});
+
+it('rejects duplicate and malformed shelf collections', () => {
+  const plant = { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } };
+  expect(isShelfMessage({ type: 'shelfState', plants: [plant, plant] })).toBe(false);
+  expect(isShelfMessage({ type: 'shelfState', plants: {} })).toBe(false);
+  expect(isShelfMessage({ type: 'shelfState', plants: [{ ...plant, id: 'unknown' }] })).toBe(false);
 });

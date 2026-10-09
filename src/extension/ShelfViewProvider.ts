@@ -1,10 +1,22 @@
 import { randomBytes } from 'node:crypto';
 import { serializeBootstrap, type BootstrapData } from '../shared/bootstrap.js';
 import * as vscode from 'vscode';
-import { plants, INITIAL_HEALTH, restorePlant, isWebviewMessage, type ShelfMessage } from '../shared/plants.js';
+import { plants, INITIAL_HEALTH, restorePlant, isWebviewMessage, isSavedShelf, type SavedPlant, type ShelfMessage } from '../shared/plants.js';
 
 export class ShelfViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codePlants.shelf';
+  private pending: Promise<void> = Promise.resolve();
+
+  private readShelf(): SavedPlant[] {
+    const saved = this.workspaceState.get<unknown>('shelfPlants');
+    if (saved !== undefined) {
+      if (!isSavedShelf(saved)) throw new Error('Invalid saved shelf');
+      return saved;
+    }
+    const legacy = restorePlant(this.workspaceState.get<unknown>('selectedPlant'));
+    return legacy ? [legacy] : [];
+  }
+
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
@@ -13,28 +25,41 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
 
   public resolveWebviewView(view: vscode.WebviewView): void {
     const webview = view.webview;
-    const sendState = async (): Promise<void> => {
-      const plant = restorePlant(this.workspaceState.get<unknown>('selectedPlant'));
-      const message: ShelfMessage = {
-        type: 'shelfState', plantId: plant?.id ?? null, plant,
-      };
-      await webview.postMessage(message);
-    };
     const listener = webview.onDidReceiveMessage(async (message: unknown) => {
       if (!isWebviewMessage(message)) return;
-      if (message.type === 'selectPlant') {
-        try {
-          const existing = restorePlant(this.workspaceState.get<unknown>('selectedPlant'));
-          const plant = (existing?.id === message.plantId ? existing : null)
-            ?? { id: message.plantId, addedAt: new Date().toISOString(), stage: 'Seedling', health: INITIAL_HEALTH };
-          await this.workspaceState.update('selectedPlant', plant);
-        } catch {
-          const error: ShelfMessage = { type: 'saveError' };
-          await webview.postMessage(error);
-          return;
+      // Serialize read-modify-write operations, including requests from replaced views.
+      const previous = this.pending;
+      let release = () => {};
+      this.pending = new Promise<void>(resolve => { release = resolve; });
+      await previous;
+      try {
+        let shelf = this.readShelf();
+        const needsMigration = this.workspaceState.get<unknown>('shelfPlants') === undefined
+          && shelf.length > 0;
+        if (message.type === 'addPlant' && !shelf.some(plant => plant.id === message.plantId)) {
+          const next: SavedPlant[] = [...shelf, {
+            id: message.plantId, addedAt: new Date().toISOString(), stage: 'Seedling', health: INITIAL_HEALTH,
+          }];
+          await this.workspaceState.update('shelfPlants', next);
+          shelf = next;
+        } else if (needsMigration) {
+          // Keep the legacy key intact, including when this write fails.
+          await this.workspaceState.update('shelfPlants', shelf);
         }
+        const response: ShelfMessage = { type: 'shelfState', plants: shelf };
+        await webview.postMessage(response);
+      } catch {
+        if (message.type === 'ready') {
+          try {
+            const response: ShelfMessage = { type: 'shelfState', plants: this.readShelf() };
+            await webview.postMessage(response);
+          } catch { /* Do not overwrite an invalid save. */ }
+        }
+        const error: ShelfMessage = { type: 'saveError' };
+        await webview.postMessage(error);
+      } finally {
+        release();
       }
-      await sendState();
     });
     view.onDidDispose(() => listener.dispose());
     const bundleRoot = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');

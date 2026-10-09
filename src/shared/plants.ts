@@ -32,15 +32,23 @@ export function isPlantId(value: unknown): value is PlantId {
 export function getPlant(id: PlantId) {
   return availablePlants.find(plant => plant.id === id)!;
 }
-export type WebviewMessage = { type: 'ready' } | { type: 'selectPlant'; plantId: PlantId };
+// Visible artwork bounds within the original 128 × 192 SVG frames.
+// Keep these alongside plant definitions when replacing stage-one artwork.
+export const plantArtworkBounds: Record<PlantId, { left: number; top: number; right: number; bottom: number }> = {
+  stringle: { left: 30, top: 123, right: 98, bottom: 190 },
+  pricklepop: { left: 30, top: 113, right: 98, bottom: 190 },
+  pebblebloom: { left: 30, top: 101, right: 98, bottom: 190 },
+};
+
+export type WebviewMessage = { type: 'ready' } | { type: 'addPlant'; plantId: PlantId };
 export type ShelfMessage =
-  | { type: 'shelfState'; plantId: PlantId | null; plant: SavedPlant | null }
+  | { type: 'shelfState'; plants: SavedPlant[] }
   | { type: 'saveError' };
 
 export function isWebviewMessage(value: unknown): value is WebviewMessage {
   if (typeof value !== 'object' || value === null || !('type' in value)) return false;
   return value.type === 'ready'
-    || (value.type === 'selectPlant' && 'plantId' in value && isPlantId(value.plantId));
+    || (value.type === 'addPlant' && 'plantId' in value && isPlantId(value.plantId));
 }
 
 export const INITIAL_HEALTH = { label: 'Thriving', value: 80 } as const;
@@ -71,10 +79,13 @@ export function restorePlant(value: unknown): SavedPlant | null {
     : null;
 }
 
+export function isSavedShelf(value: unknown): value is SavedPlant[] {
+  return Array.isArray(value) && value.every(isSavedPlant)
+    && new Set(value.map(plant => plant.id)).size === value.length;
+}
+
 export function isShelfMessage(value: unknown): value is ShelfMessage {
   if (typeof value !== 'object' || value === null || !('type' in value)) return false;
   return value.type === 'saveError'
-    || (value.type === 'shelfState' && 'plantId' in value && 'plant' in value
-      && ((value.plantId === null && value.plant === null)
-        || (isSavedPlant(value.plant) && value.plantId === value.plant.id)));
+    || (value.type === 'shelfState' && 'plants' in value && isSavedShelf(value.plants));
 }

@@ -1,22 +1,27 @@
 # Code Plants
 
 A TypeScript VS Code extension with a Plant Shelf view inside Explorer.
-The view displays the supplied wooden shelf over the funky wallpaper background,
-inside a bounded 400 × 300px scene above the bottom controls. The background,
-shelf, and plant scale together between 75% and 100%. Smaller views crop the
-scene's sides and top; larger views centre it without enlarging it further.
-The wallpaper fills the bordered container behind both the scene and **Add +**.
-The button sits over the wallpaper at the bottom, keeping its normal size and
-remaining visible as the artwork area crops in smaller views.
-The main view does not scroll. The bottom **Add +** button opens a Plants dialog showing
-Stringle and a Dangleleaf preview labelled **Not available yet**. Dangleleaf
-cannot be selected. Close the dialog with **Close**, Escape, or a click outside it.
-Short or narrow views use compact previews, spacing, and text; Dangleleaf's
-label becomes **Unavailable**. The dialog retains scrolling as a fallback
-for extremely small views or increased text zoom.
-Click Stringle to place it in the centre of the shelf. The selection is saved
-for the current workspace and restored after reloading. Selecting it again
-keeps the same single plant on the shelf.
+The view displays the supplied wooden shelf over the funky wallpaper background.
+Use **Add +** in the container’s top-left corner to open the Plants dialog and add Stringle, Pricklepop, or Pebblebloom.
+Each plant can be added once; owned plants show **On your shelf** with a disabled
+button. Dangleleaf remains a preview labelled **Not available yet**.
+The dialog stays open after additions and moves focus to the next available
+plant, or Close when all plants have been added. Close it with **Close**, Escape,
+or a click outside it. Cards stack when their text would wrap in the grid.
+
+Plants appear in addition order, with smaller artwork as the shelf fills.
+Narrow views scroll the shelf horizontally instead of shrinking plants below
+72px wide. A contrasting horizontal scrollbar appears when needed. Focus the
+shelf region and use Left/Right or Home/End to browse; Tab brings each plant
+into view. Manual scrolling is preserved when the panel resizes. Click a plant, or focus it and press Enter or Space,
+to inspect its name, date added, stage, and health. Only one info card is
+open at a time; click outside it or press Escape to close it. Cards follow their plants when the shelf scrolls and close when their plant
+moves completely out of view.
+
+The collection and each plant's metadata are saved for the current workspace.
+Existing single-plant saves migrate automatically while retaining the original
+save. Historical dates that were never recorded remain unknown. Additions appear
+only after saving succeeds; failed saves can be retried.
 
 ## Requirements
 
@@ -67,12 +72,14 @@ and error state live in React. The native dialog and existing scene styles remai
 
 Run `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and
 `npm run vscode:prepublish`. Tests cover message boundaries, bootstrap handling,
-selection, save failure/retry, and subscription lifecycle. Tests use a limited
+unique additions, migration, concurrent persistence, save failure/retry,
+info cards, modal focus, and subscription lifecycle. Tests use a limited
 native-dialog stub; they do not establish browser focus or layout behaviour.
 
 In the Extension Development Host, manually check:
 
-- Empty shelf, selection, repeated selection, and restoration after reload.
+- Empty shelf, one through three additions, owned-card availability, legacy
+  migration, and restoration after reload.
 - Dialog opening, Close, Escape, backdrop dismissal, and return of focus to Add.
   Dragging from dialog content onto the backdrop must not dismiss it.
 - Narrow and short Explorer views, dialog scrolling, and 200% zoom.

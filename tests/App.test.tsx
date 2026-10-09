@@ -21,7 +21,7 @@ function harness(initial?: ShelfMessage) {
 }
 
 it('subscribes before ready and cleans up under StrictMode', () => {
-  const app = harness({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } });
+  const app = harness({ type: 'shelfState', plants: [{ id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } }] });
   expect(screen.getByRole('img', { name: /Stringle, a small/ })).toBeTruthy();
   expect(app.listeners.size).toBe(1);
   app.unmount();
@@ -34,7 +34,7 @@ it('loads an empty shelf, prevents duplicate commands, and completes selection',
   await user.click(screen.getByRole('button', { name: 'Add' }));
   const select = screen.getByRole('button', { name: /Stringle/ }) as HTMLButtonElement;
   expect(select.disabled).toBe(true);
-  app.receive({ type: 'shelfState', plantId: null, plant: null });
+  app.receive({ type: 'shelfState', plants: [] });
   expect(select.disabled).toBe(false);
   expect(screen.queryByRole('img', { name: /Stringle, a small/ })).toBeNull();
   expect(screen.getByRole('article', { name: 'Dangleleaf' })).toBeTruthy();
@@ -42,23 +42,22 @@ it('loads an empty shelf, prevents duplicate commands, and completes selection',
   await user.click(select);
   await user.click(select);
   expect(select.disabled).toBe(true);
-  expect(app.send.mock.calls.filter(([message]) => message.type === 'selectPlant')).toHaveLength(1);
-  expect(app.send).toHaveBeenCalledWith({ type: 'selectPlant', plantId: 'stringle' });
-  app.receive({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } });
+  expect(app.send.mock.calls.filter(([message]) => message.type === 'addPlant')).toHaveLength(1);
+  expect(app.send).toHaveBeenCalledWith({ type: 'addPlant', plantId: 'stringle' });
+  app.receive({ type: 'shelfState', plants: [{ id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } }] });
   expect(screen.getByRole('img', { name: /Stringle, a small/ })).toBeTruthy();
   expect(screen.getByText('Stringle added to shelf.')).toBeTruthy();
-  expect(screen.queryByRole('dialog')).toBeNull();
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add' }));
-  await user.click(screen.getByRole('button', { name: 'Add' }));
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: /Pricklepop.*Add to shelf/ }));
   expect(screen.getByText('On your shelf')).toBeTruthy();
   await user.click(screen.getByRole('button', { name: /Stringle.*On your shelf/ }));
-  app.receive({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } });
+  app.receive({ type: 'shelfState', plants: [{ id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } }] });
   expect(screen.getAllByRole('img', { name: /Stringle, a small/ })).toHaveLength(1);
 });
 
 it('shows save failure and allows retry without changing the shelf', async () => {
   const user = userEvent.setup();
-  const app = harness({ type: 'shelfState', plantId: null, plant: null });
+  const app = harness({ type: 'shelfState', plants: [] });
   await user.click(screen.getByRole('button', { name: 'Add' }));
   const select = screen.getByRole('button', { name: /Stringle/ }) as HTMLButtonElement;
   await user.click(select);
@@ -68,13 +67,13 @@ it('shows save failure and allows retry without changing the shelf', async () =>
   expect(screen.queryByRole('img', { name: /Stringle, a small/ })).toBeNull();
   await user.click(select);
   expect(screen.queryByText('Could not save your plant. Please try again.')).toBeNull();
-  app.receive({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } });
+  app.receive({ type: 'shelfState', plants: [{ id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } }] });
   expect(screen.getByRole('img', { name: /Stringle, a small/ })).toBeTruthy();
 });
 
 it('synchronizes Close and cancel with dialog state', async () => {
   const user = userEvent.setup();
-  harness({ type: 'shelfState', plantId: null, plant: null });
+  harness({ type: 'shelfState', plants: [] });
   const add = screen.getByRole('button', { name: 'Add' });
   await user.click(add);
   await user.click(screen.getByRole('button', { name: 'Close' }));
@@ -86,7 +85,7 @@ it('synchronizes Close and cancel with dialog state', async () => {
 
 it('requires both ends of a backdrop gesture to be outside', async () => {
   const user = userEvent.setup();
-  harness({ type: 'shelfState', plantId: null, plant: null });
+  harness({ type: 'shelfState', plants: [] });
   await user.click(screen.getByRole('button', { name: 'Add' }));
   const dialog = screen.getByRole('dialog');
   vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 100, 100));
@@ -104,17 +103,46 @@ it('requires both ends of a backdrop gesture to be outside', async () => {
 
 it.each(['pricklepop', 'pebblebloom'] as const)('selects %s and displays its artwork and information', async id => {
   const user = userEvent.setup();
-  const app = harness({ type: 'shelfState', plantId: null, plant: null });
+  const app = harness({ type: 'shelfState', plants: [] });
   const name = id === 'pricklepop' ? 'Pricklepop' : 'Pebblebloom';
   await user.click(screen.getByRole('button', { name: 'Add' }));
   await user.click(screen.getByRole('button', { name: new RegExp(`${name}.*Add to shelf`) }));
-  expect(app.send).toHaveBeenCalledWith({ type: 'selectPlant', plantId: id });
-  app.receive({ type: 'shelfState', plantId: id, plant: {
+  expect(app.send).toHaveBeenCalledWith({ type: 'addPlant', plantId: id });
+  app.receive({ type: 'shelfState', plants: [{
     id, addedAt: '2026-10-09T12:00:00.000Z', stage: 'Seedling', health: { label: 'Thriving', value: 80 },
-  } });
+  }] });
+  await user.click(screen.getByRole('button', { name: 'Close' }));
   const image = screen.getByRole('img', { name: new RegExp(name) });
   expect(image.getAttribute('src')).toBe(`/${id}.svg`);
   await user.click(screen.getByRole('button', { name: `View information about ${name}` }));
   expect(screen.getByRole('region', { name })).toBeTruthy();
   expect(screen.getByText(`${name} added to shelf.`)).toBeTruthy();
+});
+
+it('adds several plants without closing, blocks owned plants, and focuses Close when full', async () => {
+  const user = userEvent.setup();
+  const app = harness({ type: 'shelfState', plants: [] });
+  const shelf: import('../src/shared/plants.js').SavedPlant[] = [];
+  await user.click(screen.getByRole('button', { name: 'Add' }));
+  for (const id of ['stringle', 'pricklepop', 'pebblebloom'] as const) {
+    const name = id === 'stringle' ? 'Stringle' : id === 'pricklepop' ? 'Pricklepop' : 'Pebblebloom';
+    const button = screen.getByRole('button', { name: new RegExp(`${name}.*Add to shelf`) });
+    await user.click(button);
+    shelf.push({ id, addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } });
+    app.receive({ type: 'shelfState', plants: [...shelf] });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect((screen.getByRole('button', { name: new RegExp(`${name}.*On your shelf`) }) as HTMLButtonElement).disabled).toBe(true);
+  }
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+  expect(app.send.mock.calls.filter(([message]) => message.type === 'addPlant')).toHaveLength(3);
+  await user.click(screen.getByRole('button', { name: 'Close' }));
+  const triggers = screen.getAllByRole('button', { name: /View information/ });
+  expect(triggers).toHaveLength(3);
+  await user.click(triggers[0]!);
+  expect(screen.getByRole('region', { name: 'Stringle' })).toBeTruthy();
+  await user.click(triggers[1]!);
+  expect(screen.queryByRole('region', { name: 'Stringle' })).toBeNull();
+  expect(screen.getByRole('region', { name: 'Pricklepop' })).toBeTruthy();
+  const ids = Array.from(document.querySelectorAll('[id]')).map(element => element.id);
+  expect(new Set(ids).size).toBe(ids.length);
 });

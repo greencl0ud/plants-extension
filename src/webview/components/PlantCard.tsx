@@ -9,7 +9,7 @@ export function PlantCard(props: CardProps) {
   const preview = <span className="plant-preview"><img src={props.artwork}
     alt={props.plant.description}
     width="128" height="192" draggable={false} /></span>;
-  if (props.available) return <button className="plant-card" type="button"
+  if (props.available) return <button className="plant-card" data-plant-id={props.plant.id} type="button"
     disabled={props.disabled} onClick={props.onSelect}>
     {preview}<span className="plant-name">{props.plant.name}</span><span className="plant-status">{props.status}</span>
   </button>;

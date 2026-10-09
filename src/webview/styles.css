@@ -29,7 +29,7 @@ main {
   isolation: isolate;
   box-sizing: border-box;
   width: min(100%, 400px);
-  /* 300px scene, 32px control, 24px clearance, and 2px outer border. */
+  /* Top controls: 32px button + 24px padding; scene: 300px; border: 2px. */
   height: min(100%, 358px);
   display: flex;
   flex-direction: column;
@@ -79,32 +79,42 @@ main {
   width: 100%;
   height: min(100%, 300px);
   container-type: size;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Use explicit Chromium styling to keep the scrollbar visible on macOS. */
+  scrollbar-color: auto;
+  scrollbar-width: auto;
 }
 
 .shelf-scene {
   position: relative;
   isolation: isolate;
-  /* Scale the 400×300 scene between 75% and 100%. Below that, the window
-     crops its sides and top instead of continuing to shrink the plant. */
-  width: clamp(300px, min(100cqw, calc(100cqh * 4 / 3)), 400px);
-  aspect-ratio: 4 / 3;
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  --plant-width: clamp(72px, calc(100cqh * 0.426667), 128px);
 }
-
-.shelf-plant {
+.shelf-scene-2 { --plant-width: clamp(72px, calc(100cqh * 0.346667), 104px); }
+.shelf-scene-3 { --plant-width: clamp(72px, calc(100cqh * 0.293333), 88px); }
+.shelf-plants {
   position: absolute;
-  left: 50%;
-  /* Base coordinates: 128×192 plant at y=82; pot base 82+188=270,
-     exactly matching the shelf surface. All positions scale together. */
-  top: 27.333333%;
-  width: 32%;
-  height: 64%;
+  inset-inline: 12px;
+  /* SVG pot bottoms are at y=188 of 192: compensate for the final 4px. */
+  bottom: calc(10% - var(--plant-width) / 32);
+  display: flex;
+  justify-content: space-evenly;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shelf-plants > li { flex: 0 0 var(--plant-width); }
+.shelf-plant {
+  display: block;
+  width: var(--plant-width, 128px);
+  height: auto;
+  aspect-ratio: 2 / 3;
   max-width: none;
-  transform: translateX(-50%);
 }
 
 .visually-hidden {
@@ -123,8 +133,8 @@ main {
   z-index: 1;
   display: flex;
   flex-shrink: 0;
-  justify-content: center;
-  /* Reserve clearance for the unscaled button over the full background. */
+  justify-content: flex-start;
+  /* Keep the top controls separate from the scrollable scene. */
   padding: 12px;
 }
 
@@ -429,4 +439,25 @@ body.vscode-high-contrast-light .plant-info { --color-health: var(--vscode-foreg
   pointer-events: none;
   top: 0;
   left: 0;
+}
+
+button.plant-card:disabled .plant-status {
+  border-color: var(--color-outline);
+  font-weight: bold;
+}
+
+.scene-window:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, var(--color-outline));
+  outline-offset: -3px;
+}
+.scene-window::-webkit-scrollbar { height: 14px; }
+.scene-window::-webkit-scrollbar-track {
+  background: var(--color-soft-cream);
+  border-top: 1px solid var(--color-outline);
+}
+.scene-window::-webkit-scrollbar-thumb {
+  background: var(--color-outline);
+  border: 3px solid var(--color-soft-cream);
+  border-radius: 8px;
+  min-width: 24px;
 }

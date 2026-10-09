@@ -10,7 +10,7 @@ it('sends typed commands, validates responses, and removes listeners', () => {
   expect(postMessage).toHaveBeenCalledWith({ type: 'ready' });
   window.dispatchEvent(new MessageEvent('message', { data: { type: 'shelfState', plantId: 'dangleleaf' } }));
   expect(listener).not.toHaveBeenCalled();
-  window.dispatchEvent(new MessageEvent('message', { data: { type: 'shelfState', plantId: null, plant: null } }));
+  window.dispatchEvent(new MessageEvent('message', { data: { type: 'shelfState', plants: [] } }));
   expect(listener).toHaveBeenCalledTimes(1);
   unsubscribe();
   window.dispatchEvent(new MessageEvent('message', { data: { type: 'saveError' } }));

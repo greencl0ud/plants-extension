@@ -1,0 +1,34 @@
+:root {
+  /* 🌿 Plant foliage */
+  --color-forest-green: #527a59;
+  --color-sage: #91b897;
+  --color-soft-mint: #bed8b5;
+
+  /* 🪴 Plant pots */
+  --color-terracotta: #c98365;
+
+  /* 🪵 Shelf */
+  --color-warm-wood: #b99472;
+  --color-dark-wood: #8d7058;
+
+  /* 🌸 Flowers */
+  --color-dusty-pink: #e6a5a8;
+  --color-soft-yellow: #e8c76a;
+
+  /* 🎨 Backgrounds */
+  --color-soft-cream: #f4f0e6;
+
+  /* ✏️ Outlines */
+  --color-outline: #4a5d4c;
+
+  /* 💧 Plant resources */
+  --color-water: #6aabce;
+  --color-sunlight: #d4a443;
+  --color-nutrients: #6e9c70;
+
+  /* 🖥️ UI */
+  --color-text: #3f4a3f;
+  --color-text-strong: #263526;
+  --color-text-muted: #788578;
+  --color-border: #d8ded2;
+}

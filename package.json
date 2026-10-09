@@ -1,0 +1,44 @@
+{
+  "name": "code-plants",
+  "displayName": "Code Plants",
+  "description": "A cosy plant shelf in your VS Code Explorer.",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "codePlants.shelf",
+          "name": "Plant Shelf"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "npm run typecheck && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json",
+    "lint": "eslint src",
+    "vscode:prepublish": "npm run typecheck && npm run lint && node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/vscode": "^1.100.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1"
+  }
+}

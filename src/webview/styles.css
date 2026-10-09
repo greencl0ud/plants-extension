@@ -1,0 +1,367 @@
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+main {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.shelf-display {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: min(100%, 400px);
+  /* 300px scene, 32px control, 24px clearance, and 2px outer border. */
+  height: min(100%, 358px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--vscode-panel-border, var(--color-border));
+  border-radius: 8px;
+}
+
+.background-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+
+.shelf-art {
+  position: absolute;
+  left: 0;
+  top: 31.666667%;
+  display: block;
+  width: 100%;
+  /* Explicit dimensions match the SVG's 800:500 viewBox, rather than its
+     conflicting intrinsic 128:192 dimensions. Surface: 95 + 350/2 = 270. */
+  height: 83.333333%;
+  object-fit: fill;
+  max-width: none;
+  user-select: none;
+}
+
+.shelf-stage {
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.scene-window {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: min(100%, 300px);
+  container-type: size;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.shelf-scene {
+  position: relative;
+  isolation: isolate;
+  /* Scale the 400×300 scene between 75% and 100%. Below that, the window
+     crops its sides and top instead of continuing to shrink the plant. */
+  width: clamp(300px, min(100cqw, calc(100cqh * 4 / 3)), 400px);
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
+}
+
+.shelf-plant {
+  position: absolute;
+  left: 50%;
+  /* Base coordinates: 128×192 plant at y=82; pot base 82+188=270,
+     exactly matching the shelf surface. All positions scale together. */
+  top: 27.333333%;
+  width: 32%;
+  height: 64%;
+  max-width: none;
+  transform: translateX(-50%);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.shelf-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  /* Reserve clearance for the unscaled button over the full background. */
+  padding: 12px;
+}
+
+#add-plant {
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 10px;
+}
+
+@media (max-height: 120px) {
+  .shelf-actions {
+    padding-block: 4px;
+  }
+}
+
+button {
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  color: var(--color-soft-cream);
+  background: var(--color-outline);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  color: var(--color-text);
+  background: var(--color-soft-cream);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, var(--color-outline));
+  outline-offset: 3px;
+}
+
+dialog {
+  box-sizing: border-box;
+  width: min(360px, calc(100% - 16px));
+  max-height: calc(100% - 24px);
+  padding: 8px;
+  overflow: auto;
+  border: 2px solid var(--color-outline);
+  border-radius: 12px;
+  color: var(--color-text);
+  background: var(--color-soft-cream);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.dialog-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dialog-header h1 {
+  margin: 0;
+  font-size: 1.2em;
+  overflow-wrap: anywhere;
+}
+
+.plant-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  gap: 6px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.plant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-soft-cream);
+}
+
+button.plant-card:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 2px var(--color-outline);
+}
+
+button:disabled {
+  cursor: default;
+}
+
+.plant-preview {
+  position: relative;
+  display: block;
+  width: 80px;
+  max-width: 100%;
+  /* Frame the centre 80 × 88 region of each 128 × 192 SVG.
+     Remove transparent sides as well as the top, preserving artwork size. */
+  aspect-ratio: 80 / 88;
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.plant-preview img {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  display: block;
+  width: 160%;
+  /* The image intentionally extends past its cropped preview frame.
+     Override host image limits so its centre stays aligned with the frame. */
+  max-width: none;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.availability-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-outline);
+  border-radius: 6px;
+  color: var(--color-text-strong);
+  background: var(--color-sage);
+  overflow-wrap: anywhere;
+}
+
+.plant-name {
+  display: block;
+  max-width: 100%;
+  margin: 4px 0 0;
+  font-size: 1em;
+  overflow-wrap: anywhere;
+  font-weight: bold;
+  line-height: 1.4;
+}
+
+#plant-status {
+  display: block;
+  margin-top: 4px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  overflow-wrap: anywhere;
+}
+
+#plant-status,
+.availability-badge {
+  box-sizing: border-box;
+  max-width: 100%;
+  line-height: 1.4;
+}
+
+#selection-error:empty {
+  display: none;
+}
+
+.availability-compact {
+  display: none;
+}
+
+/* Fit ordinary short Explorer views without clipping content or controls.
+   Keep overflow:auto as a fallback for extreme sizes and increased text zoom. */
+@media (max-height: 280px), (max-width: 240px) {
+  dialog {
+    width: min(360px, calc(100% - 12px));
+    max-height: calc(100% - 12px);
+    padding: 6px;
+    font-size: 0.9em;
+  }
+
+  .dialog-header {
+    gap: 4px;
+  }
+
+  .dialog-header h1 {
+    font-size: 1.1em;
+  }
+
+  #close-dialog {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px 8px;
+  }
+
+  .plant-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 5em), 1fr));
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .plant-list > li {
+    min-width: 0;
+  }
+
+  .plant-card {
+    padding: 4px;
+  }
+
+  .plant-preview {
+    width: clamp(24px, 22vh, 56px);
+  }
+
+  .plant-name {
+    margin-top: 2px;
+    line-height: 1.25;
+  }
+
+  #plant-status,
+  .availability-badge {
+    margin-top: 2px;
+    padding: 2px 3px;
+    line-height: 1.25;
+  }
+
+  .availability-full {
+    display: none;
+  }
+
+  .availability-compact {
+    display: inline;
+  }
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --color-outline: var(--vscode-contrastBorder, var(--vscode-foreground));
+  --color-text: var(--vscode-foreground);
+  --color-text-strong: var(--vscode-foreground);
+  --color-soft-cream: var(--vscode-sideBar-background);
+  --color-sage: var(--vscode-sideBar-background);
+}

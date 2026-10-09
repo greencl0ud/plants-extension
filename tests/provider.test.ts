@@ -30,12 +30,12 @@ function provider(saved: unknown = null, fail = false) {
 it('restores saved state and saves only validated commands', async () => {
   const app = provider('stringle');
   await app.receive({ type: 'ready' });
-  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plantId: 'stringle' });
+  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } });
   await app.receive({ type: 'selectPlant', plantId: 'dangleleaf' });
   expect(app.update).not.toHaveBeenCalled();
   await app.receive({ type: 'selectPlant', plantId: 'stringle' });
-  expect(app.update).toHaveBeenCalledWith('selectedPlant', 'stringle');
-  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plantId: 'stringle' });
+  expect(app.update).toHaveBeenCalledWith('selectedPlant', { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } });
+  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } });
   app.close();
   expect(app.dispose).toHaveBeenCalledOnce();
 });
@@ -43,7 +43,7 @@ it('restores saved state and saves only validated commands', async () => {
 it('returns an empty shelf for invalid saved data and reports failed persistence', async () => {
   const app = provider('invalid', true);
   await app.receive({ type: 'ready' });
-  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plantId: null });
+  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plantId: null, plant: null });
   await app.receive({ type: 'selectPlant', plantId: 'stringle' });
   expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'saveError' });
 });
@@ -56,4 +56,28 @@ it('retains CSP and resource restrictions and supplies a validated bootstrap she
   expect(app.webview.html).toContain('data-bootstrap=');
   expect(app.webview.html).not.toContain('plant-card');
   expect(app.webview.options).toMatchObject({ enableScripts: true, localResourceRoots: expect.any(Array) });
+});
+
+it('dates new plants once and restores metadata across views', async () => {
+  const app = provider();
+  await app.receive({ type: 'selectPlant', plantId: 'stringle' });
+  const saved: unknown = app.update.mock.calls[0]?.[1];
+  expect(saved).toMatchObject({ id: 'stringle', stage: 'Seedling', health: { label: 'Thriving', value: 80 }, addedAt: expect.any(String) });
+  await app.receive({ type: 'selectPlant', plantId: 'stringle' });
+  expect(app.update.mock.calls[1]?.[1]).toEqual(saved);
+  const restored = provider(saved);
+  await restored.receive({ type: 'ready' });
+  expect(restored.postMessage).toHaveBeenCalledWith({ type: 'shelfState', plantId: 'stringle', plant: saved });
+});
+
+it.each(['pricklepop', 'pebblebloom'])('saves and restores %s when switching plants', async id => {
+  const app = provider('stringle');
+  await app.receive({ type: 'selectPlant', plantId: id });
+  const saved: unknown = app.update.mock.calls[0]?.[1];
+  expect(saved).toMatchObject({ id, addedAt: expect.any(String), stage: 'Seedling' });
+  await app.receive({ type: 'selectPlant', plantId: id });
+  expect(app.update.mock.calls[1]?.[1]).toEqual(saved);
+  const restored = provider(saved);
+  await restored.receive({ type: 'ready' });
+  expect(restored.postMessage).toHaveBeenCalledWith({ type: 'shelfState', plantId: id, plant: saved });
 });

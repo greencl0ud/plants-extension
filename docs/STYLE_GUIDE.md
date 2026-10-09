@@ -46,3 +46,9 @@ pairing fails. Do not communicate state through colour alone.
 Preserve supplied SVG and image files. Use the palette for new artwork, but
 do not recolour existing assets unless requested. CSS tokens in the webview
 do not automatically apply inside SVG files loaded as images.
+
+## Typography
+
+Use a base text size of 90% of the VS Code font-size setting. Dialogs and
+controls inherit this size; headings use relative `em` sizes. Keep text
+responsive to editor font settings and zoom, and allow wrapping in narrow views.

@@ -8,6 +8,8 @@ export const assets = {
   plants: {
     stringle: 'https://file+.vscode-resource.vscode-cdn.net/stringle.svg',
     dangleleaf: 'https://file+.vscode-resource.vscode-cdn.net/dangleleaf.svg',
+    pricklepop: 'https://file+.vscode-resource.vscode-cdn.net/pricklepop.svg',
+    pebblebloom: 'https://file+.vscode-resource.vscode-cdn.net/pebblebloom.svg',
   },
 };
 
@@ -15,8 +17,8 @@ describe('message boundaries', () => {
   it('accepts supported commands and responses', () => {
     expect(isWebviewMessage({ type: 'ready' })).toBe(true);
     expect(isWebviewMessage({ type: 'selectPlant', plantId: 'stringle' })).toBe(true);
-    expect(isShelfMessage({ type: 'shelfState', plantId: null })).toBe(true);
-    expect(isShelfMessage({ type: 'shelfState', plantId: 'stringle' })).toBe(true);
+    expect(isShelfMessage({ type: 'shelfState', plantId: null, plant: null })).toBe(true);
+    expect(isShelfMessage({ type: 'shelfState', plantId: 'stringle', plant: { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } } })).toBe(true);
     expect(isShelfMessage({ type: 'saveError' })).toBe(true);
   });
   it.each([null, [], {}, 'ready', { type: 'unknown' }, { type: 'selectPlant', plantId: 'dangleleaf' }, { type: 'shelfState' }])('rejects malformed payload %j', (value) => {
@@ -37,4 +39,13 @@ describe('bootstrap data', () => {
     expect(isBootstrapData(value)).toBe(false);
     expect(() => parseBootstrap(JSON.stringify(value))).toThrow();
   });
+});
+
+it.each([
+  { id: 'stringle', addedAt: 'invalid', stage: 'Seedling', health: { label: 'Thriving', value: 80 } },
+  { id: 'stringle', addedAt: null, stage: 'Mature', health: { label: 'Thriving', value: 80 } },
+  { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 500 } },
+  null,
+])('rejects invalid plant metadata %j', plant => {
+  expect(isShelfMessage({ type: 'shelfState', plantId: 'stringle', plant })).toBe(false);
 });

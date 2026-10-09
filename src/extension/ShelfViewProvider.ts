@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { serializeBootstrap, type BootstrapData } from '../shared/bootstrap.js';
 import * as vscode from 'vscode';
-import { dangleleaf, isWebviewMessage, stringle, type ShelfMessage } from '../shared/plants.js';
+import { plants, INITIAL_HEALTH, restorePlant, isWebviewMessage, type ShelfMessage } from '../shared/plants.js';
 
 export class ShelfViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codePlants.shelf';
@@ -14,9 +14,9 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
   public resolveWebviewView(view: vscode.WebviewView): void {
     const webview = view.webview;
     const sendState = async (): Promise<void> => {
-      const saved = this.workspaceState.get<unknown>('selectedPlant');
+      const plant = restorePlant(this.workspaceState.get<unknown>('selectedPlant'));
       const message: ShelfMessage = {
-        type: 'shelfState', plantId: saved === stringle.id ? stringle.id : null,
+        type: 'shelfState', plantId: plant?.id ?? null, plant,
       };
       await webview.postMessage(message);
     };
@@ -24,7 +24,10 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
       if (!isWebviewMessage(message)) return;
       if (message.type === 'selectPlant') {
         try {
-          await this.workspaceState.update('selectedPlant', message.plantId);
+          const existing = restorePlant(this.workspaceState.get<unknown>('selectedPlant'));
+          const plant = (existing?.id === message.plantId ? existing : null)
+            ?? { id: message.plantId, addedAt: new Date().toISOString(), stage: 'Seedling', health: INITIAL_HEALTH };
+          await this.workspaceState.update('selectedPlant', plant);
         } catch {
           const error: ShelfMessage = { type: 'saveError' };
           await webview.postMessage(error);
@@ -46,15 +49,15 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(bundleRoot, 'main.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(bundleRoot, 'main.css'));
     const shelfUri = webview.asWebviewUri(vscode.Uri.joinPath(shelfRoot, 'shelf.svg'));
-    const plantUri = webview.asWebviewUri(vscode.Uri.joinPath(plantRoot, stringle.artwork));
-    const dangleleafUri = webview.asWebviewUri(vscode.Uri.joinPath(plantRoot, dangleleaf.artwork));
     const backgroundUri = webview.asWebviewUri(
       vscode.Uri.joinPath(backgroundRoot, 'funky-wallpaper.svg'),
     );
     const nonce = randomBytes(16).toString('hex');
     const bootstrap: BootstrapData = {
       shelf: shelfUri.toString(), background: backgroundUri.toString(),
-      plants: { stringle: plantUri.toString(), dangleleaf: dangleleafUri.toString() },
+      plants: Object.fromEntries(plants.map(plant => [plant.id,
+        webview.asWebviewUri(vscode.Uri.joinPath(plantRoot, plant.artwork)).toString(),
+      ])) as BootstrapData['plants'],
     };
 
     webview.html = `<!DOCTYPE html>

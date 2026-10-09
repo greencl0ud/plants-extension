@@ -1,7 +1,8 @@
+import { plants, type PlantDefinition } from './plants.js';
 export interface BootstrapData {
   shelf: string;
   background: string;
-  plants: { stringle: string; dangleleaf: string };
+  plants: Record<PlantDefinition['id'], string>;
 }
 
 function isAssetUri(value: unknown): value is string {
@@ -19,8 +20,7 @@ export function isBootstrapData(value: unknown): value is BootstrapData {
     && 'shelf' in value && isAssetUri(value.shelf)
     && 'background' in value && isAssetUri(value.background)
     && 'plants' in value && typeof value.plants === 'object' && value.plants !== null
-    && 'stringle' in value.plants && isAssetUri(value.plants.stringle)
-    && 'dangleleaf' in value.plants && isAssetUri(value.plants.dangleleaf);
+    && plants.every(plant => isAssetUri((value.plants as Record<string, unknown>)[plant.id]));
 }
 
 // JSON is stored in a double-quoted HTML attribute, never executable script.

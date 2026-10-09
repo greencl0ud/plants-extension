@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { serializeBootstrap, type BootstrapData } from '../shared/bootstrap.js';
 import * as vscode from 'vscode';
 import { dangleleaf, isWebviewMessage, stringle, type ShelfMessage } from '../shared/plants.js';
 
@@ -51,6 +52,10 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(backgroundRoot, 'funky-wallpaper.svg'),
     );
     const nonce = randomBytes(16).toString('hex');
+    const bootstrap: BootstrapData = {
+      shelf: shelfUri.toString(), background: backgroundUri.toString(),
+      plants: { stringle: plantUri.toString(), dangleleaf: dangleleafUri.toString() },
+    };
 
     webview.html = `<!DOCTYPE html>
 <html lang="en">
@@ -62,52 +67,7 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
   <title>Plant Shelf</title>
 </head>
 <body>
-  <main id="shelf" aria-label="Plant Shelf">
-    <div class="shelf-display">
-      <img class="background-art" src="${backgroundUri}" alt="" width="800" height="500" draggable="false">
-    <div class="shelf-stage">
-      <div class="scene-window">
-        <div class="shelf-scene">
-          <img class="shelf-art" src="${shelfUri}" alt="A wooden plant shelf" width="800" height="500" draggable="false">
-          <img id="shelf-plant" class="shelf-plant" src="${plantUri}" alt="${stringle.name}, a small two-leaf plant in a terracotta pot" width="128" height="192" draggable="false" hidden>
-        </div>
-      </div>
-    </div>
-    <footer class="shelf-actions">
-      <button id="add-plant" type="button" aria-haspopup="dialog">Add <span aria-hidden="true">+</span></button>
-    </footer>
-    </div>
-  </main>
-  <p id="shelf-status" class="visually-hidden" role="status"></p>
-  <dialog id="plant-dialog" aria-labelledby="plant-dialog-title">
-    <div class="dialog-content">
-      <header class="dialog-header">
-        <h1 id="plant-dialog-title">Plants</h1>
-        <button id="close-dialog" type="button" autofocus>Close</button>
-      </header>
-      <ul class="plant-list">
-        <li>
-          <button id="select-plant" class="plant-card" type="button" disabled>
-            <span class="plant-preview">
-              <img src="${plantUri}" alt="A small two-leaf plant in a terracotta pot" width="128" height="192" draggable="false">
-            </span>
-            <span class="plant-name">${stringle.name}</span>
-            <span id="plant-status">Loading shelf…</span>
-          </button>
-        </li>
-        <li>
-          <article class="plant-card plant-card-unavailable" aria-labelledby="dangleleaf-name">
-            <span class="plant-preview">
-              <img src="${dangleleafUri}" alt="A small plant with a heart-shaped leaf in a terracotta pot" width="128" height="192" draggable="false">
-            </span>
-            <h2 id="dangleleaf-name" class="plant-name">${dangleleaf.name}</h2>
-            <span class="availability-badge"><span class="availability-full">Not available yet</span><span class="availability-compact">Unavailable</span></span>
-          </article>
-        </li>
-      </ul>
-      <p id="selection-error" role="status"></p>
-    </div>
-  </dialog>
+  <div id="root" data-bootstrap="${serializeBootstrap(bootstrap)}"></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

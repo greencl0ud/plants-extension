@@ -21,9 +21,15 @@ const builds = [
   },
   {
     ...common,
-    entryPoints: ['src/webview/main.ts'],
+    entryPoints: ['src/webview/main.tsx'],
     outfile: 'dist/webview/main.js',
     platform: 'browser',
+    tsconfig: 'tsconfig.webview.json',
+    jsx: 'automatic',
+    jsxDev: !production,
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
+    },
     format: 'iife',
     target: 'es2022',
   },

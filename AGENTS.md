@@ -26,8 +26,7 @@ unless the current task requests them.
 - esbuild for bundling.
 - npm for dependency management.
 
-React is the agreed target for the webview migration. The existing UI
-uses plain TypeScript until that migration is requested.
+The webview uses React; extension integration remains plain TypeScript.
 Prefer small dependencies. Discuss adding other UI frameworks, component
 kits, state libraries, animation libraries, or game engines before
 introducing them.
@@ -36,7 +35,7 @@ introducing them.
 
 - src/extension/: activation, view provider, commands, persistence.
 - src/webview/: shelf rendering, styling, browser interactions.
-- src/webview/components/: React UI components as the migration develops.
+- src/webview/components/: React UI components.
 - src/shared/: types shared between extension and webview, when needed.
 - assets/: bundled plant, pot, and shelf artwork.
 
@@ -74,7 +73,7 @@ Keep plant definitions separate from rendering logic.
 - Follow the testing pyramid: many fast domain and message-validation
   tests, UI/integration tests for interactions, and a few extension
   end-to-end checks for wiring and persistence.
-- Use React Testing Library for component tests once test tooling exists.
+- Use React Testing Library for component tests.
   Test observable behaviour through accessible roles and names rather
   than component internals or large markup snapshots.
 - Mock the messaging adapter for component tests; verify extension

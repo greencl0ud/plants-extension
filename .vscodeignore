@@ -8,3 +8,6 @@ esbuild.js
 package-lock.json
 dist/**/*.map
 .gitignore
+
+tests/**
+vitest.config.ts

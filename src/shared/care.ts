@@ -11,6 +11,8 @@ export interface Garden extends CareSummary {
   plants: CarePlant[];
   earningDate: string;
   lastCreditedMinute: number | null;
+  // Retain identities for delayed retries; legacy saves only know a watermark.
+  minuteCredits?: { legacyThrough: number | null; minutes: number[] };
 }
 export function localDate(now: number): string {
   const date = new Date(now);
@@ -19,6 +21,7 @@ export function localDate(now: number): string {
 export function migrateGarden(plants: SavedPlant[], now: number): Garden {
   return { version: 1, food: 0, editingMinutes: 0, earnedToday: 0,
     earningDate: localDate(now), lastCreditedMinute: null,
+    minuteCredits: { legacyThrough: null, minutes: [] },
     plants: plants.map(plant => ({ ...plant, careStartedAt: now, lastFedAt: null, growthPoints: 0 })) };
 }
 export function presentPlant(plant: CarePlant, now: number): CarePlant {
@@ -35,9 +38,12 @@ export function resetAllowance(garden: Garden, now: number): Garden {
 export function creditMinute(saved: Garden, now: number): Garden {
   const garden = resetAllowance(saved, now);
   const minute = Math.floor(now / 60000);
-  if (garden.earnedToday >= 12 || (garden.lastCreditedMinute !== null && minute <= garden.lastCreditedMinute)) return garden;
+  const history = garden.minuteCredits ?? { legacyThrough: garden.lastCreditedMinute, minutes: [] };
+  if (garden.earnedToday >= 12 || (history.legacyThrough !== null && minute <= history.legacyThrough)
+    || history.minutes.includes(minute)) return garden;
   const progress = garden.editingMinutes + 1;
-  return { ...garden, lastCreditedMinute: minute, editingMinutes: progress % 5,
+  return { ...garden, lastCreditedMinute: Math.max(garden.lastCreditedMinute ?? minute, minute),
+    minuteCredits: { ...history, minutes: [...history.minutes, minute] }, editingMinutes: progress % 5,
     food: garden.food + (progress === 5 ? 1 : 0), earnedToday: garden.earnedToday + (progress === 5 ? 1 : 0) };
 }
 export function feedPlant(garden: Garden, id: PlantId, now: number): Garden {
@@ -57,8 +63,20 @@ export function isGarden(value: unknown): value is Garden {
   if (!isCareSummary(value)) return false;
   return data.version === 1 && typeof data.earningDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.earningDate)
     && (data.lastCreditedMinute === null || Number.isSafeInteger(data.lastCreditedMinute))
+    && (!('minuteCredits' in data) || isMinuteCredits(data.minuteCredits, data.lastCreditedMinute))
     && isSavedShelf(data.plants) && data.plants.every(plant =>
       'careStartedAt' in plant && typeof plant.careStartedAt === 'number' && Number.isFinite(plant.careStartedAt)
       && 'lastFedAt' in plant && (plant.lastFedAt === null || (typeof plant.lastFedAt === 'number' && Number.isFinite(plant.lastFedAt)))
       && typeof plant.growthPoints === 'number');
+}
+
+function isMinuteCredits(value: unknown, latest: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('legacyThrough' in value) || !('minutes' in value)) return false;
+  const { legacyThrough, minutes } = value;
+  return (legacyThrough === null || (Number.isSafeInteger(legacyThrough) && typeof legacyThrough === 'number'
+    && typeof latest === 'number' && legacyThrough <= latest))
+    && Array.isArray(minutes) && new Set(minutes).size === minutes.length
+    && minutes.every(minute => Number.isSafeInteger(minute) && typeof latest === 'number' && minute <= latest
+      && (legacyThrough === null || (typeof legacyThrough === 'number' && minute > legacyThrough)));
 }

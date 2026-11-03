@@ -46,7 +46,11 @@ stage uses the existing stage-one artwork in this release.
 
 Care saves are local and workspace-specific. Windows sharing a workspace use one
 locked, atomically replaced garden file in VS Code’s extension workspace storage;
-this prevents duplicate credit and lost food updates. Original collection and
+this prevents duplicate credit and lost food updates. Credited minute identities
+are retained locally so delayed retries from other windows can arrive out of order.
+This history grows by at most 60 credited minutes per earning day. Existing care
+saves retain their original deduplication watermark; minutes at or before that
+pre-upgrade watermark cannot be recovered. Original collection and
 single-plant saves remain untouched after migration. A failed feeding leaves food
 and growth unchanged. Failed editing credit retries while the window remains open;
 credit that never saved can be lost when the window closes. Balances, minute credit,

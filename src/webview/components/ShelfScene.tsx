@@ -1,9 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { BootstrapData } from '../../shared/bootstrap.js';
-import type { PlantId, SavedPlant } from '../../shared/plants.js';
+import type { CareSummary, PlantId, SavedPlant } from '../../shared/plants.js';
 import { PlantInfoCard } from './PlantInfoCard.js';
 
-export function ShelfScene({ assets, plants }: { assets: BootstrapData; plants: SavedPlant[] }) {
+export function ShelfScene({ assets, plants, care, onFeed, feedingPending, careError }: {
+  assets: BootstrapData; plants: SavedPlant[]; care?: CareSummary; onFeed?: (id: PlantId) => void;
+  feedingPending?: boolean; careError?: string;
+}) {
   const [active, setActive] = useState<PlantId | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const scene = useRef<HTMLDivElement>(null);
@@ -56,6 +59,7 @@ export function ShelfScene({ assets, plants }: { assets: BootstrapData; plants: 
       <img className="shelf-art" src={assets.shelf} alt="A wooden plant shelf" width="800" height="500" draggable={false} />
       <ul className="shelf-plants">{plants.map(plant => <li key={plant.id}>
         <PlantInfoCard plant={plant} artwork={assets.plants[plant.id]} open={active === plant.id}
+          care={care} onFeed={onFeed} feedingPending={feedingPending} careError={careError}
           onOpenChange={open => setActive(current => open ? plant.id : current === plant.id ? null : current)} />
       </li>)}</ul>
     </div>

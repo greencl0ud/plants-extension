@@ -23,6 +23,36 @@ Existing single-plant saves migrate automatically while retaining the original
 save. Historical dates that were never recorded remain unknown. Additions appear
 only after saving succeeds; failed saves can be retried.
 
+## Plant care
+
+The workspace shares a food balance, shown beside **Add**, and progress such as
+**3/5 editing minutes**. Each fixed clock minute containing a text change in an
+open workspace document earns one credit. Five credited minutes earn one food,
+up to twelve food per local calendar day. Only the focused VS Code window earns
+credit. Unsaved edits, formatting, refactoring, paste, deletion, and undo count;
+reading, unchanged saves, untitled documents, and files outside the workspace do not.
+Food can be earned before adding a plant and never expires. Partial progress is saved.
+
+Open a plant’s info card and choose **Feed · 1 food**. Feeding spends shared food
+on that plant, makes it thriving for 168 hours, then content for another 168 hours,
+then resting. Unfed new plants start content for 168 hours. Existing plants receive
+this content period on their first care migration. Resting never causes sickness,
+death, or loss of growth. Feeding refreshes the period instead of stacking time.
+
+Each food adds one permanent growth point: **Growing** at five points and
+**Mature** at fifteen. Mature plants can be fed when content or resting to refresh
+health; mature thriving plants cannot be fed. **Visual growth is pending:** every
+stage uses the existing stage-one artwork in this release.
+
+Care saves are local and workspace-specific. Windows sharing a workspace use one
+locked, atomically replaced garden file in VS Code’s extension workspace storage;
+this prevents duplicate credit and lost food updates. Original collection and
+single-plant saves remain untouched after migration. A failed feeding leaves food
+and growth unchanged. Failed editing credit retries while the window remains open;
+credit that never saved can be lost when the window closes. Balances, minute credit,
+and care timestamps are stored; code contents and file names are never recorded.
+No activity telemetry or reward pop-ups are used.
+
 ## Requirements
 
 - Node.js 22.22.2+ on the 22.x release line, or 24.15+ on the 24.x release line, and npm.
@@ -73,11 +103,15 @@ and error state live in React. The native dialog and existing scene styles remai
 Run `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and
 `npm run vscode:prepublish`. Tests cover message boundaries, bootstrap handling,
 unique additions, migration, concurrent persistence, save failure/retry,
-info cards, modal focus, and subscription lifecycle. Tests use a limited
+info cards, modal focus, subscription lifecycle, care boundaries, daily limits,
+feeding failures, and shared-file persistence. Tests use a limited
 native-dialog stub; they do not establish browser focus or layout behaviour.
 
 In the Extension Development Host, manually check:
 
+- Editing progress, food earnings, feeding, mature feeding limits, save retries,
+  and restoration of care after reload. Open the same workspace in two windows
+  and verify one credit per minute while switching focus.
 - Empty shelf, one through three additions, owned-card availability, legacy
   migration, and restoration after reload.
 - Dialog opening, Close, Escape, backdrop dismissal, and return of focus to Add.

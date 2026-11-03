@@ -43,7 +43,7 @@ describe('bootstrap data', () => {
 
 it.each([
   { id: 'stringle', addedAt: 'invalid', stage: 'Seedling', health: { label: 'Thriving', value: 80 } },
-  { id: 'stringle', addedAt: null, stage: 'Mature', health: { label: 'Thriving', value: 80 } },
+  { id: 'stringle', addedAt: null, stage: 'Ancient', health: { label: 'Thriving', value: 80 } },
   { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 500 } },
   null,
 ])('rejects invalid plant metadata %j', plant => {
@@ -55,4 +55,14 @@ it('rejects duplicate and malformed shelf collections', () => {
   expect(isShelfMessage({ type: 'shelfState', plants: [plant, plant] })).toBe(false);
   expect(isShelfMessage({ type: 'shelfState', plants: {} })).toBe(false);
   expect(isShelfMessage({ type: 'shelfState', plants: [{ ...plant, id: 'unknown' }] })).toBe(false);
+});
+
+it('validates care messages and counters at the webview boundary', () => {
+  expect(isWebviewMessage({ type: 'feedPlant', plantId: 'stringle' })).toBe(true);
+  expect(isShelfMessage({ type: 'earningError' })).toBe(true);
+  const state = { type: 'shelfState', plants: [], care: { food: 1, editingMinutes: 3, earnedToday: 4 } };
+  expect(isShelfMessage(state)).toBe(true);
+  expect(isShelfMessage({ ...state, care: { ...state.care, food: -1 } })).toBe(false);
+  expect(isShelfMessage({ ...state, care: { ...state.care, editingMinutes: 5 } })).toBe(false);
+  expect(isShelfMessage({ ...state, fedPlantId: 'dangleleaf' })).toBe(false);
 });

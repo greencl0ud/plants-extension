@@ -82,3 +82,18 @@ it('retries an older failed window credit after another window saves a newer min
   await Promise.all([windowA.refresh(), windowB.refresh()]);
   expect((await reloaded.transact(g => g)).editingMinutes).toBe(2);
 });
+
+it('preserves yesterday\'s cap when an independent window advances the calendar', async () => {
+  const path = await location();
+  const midnight = new Date(2026, 10, 4).getTime();
+  const previous = midnight - 60000;
+  const a = new FileGardenStore(path, () => ({ ...migrateGarden([], previous), earnedToday: 12 }));
+  const b = new FileGardenStore(path, () => { throw new Error('Must restore'); });
+  await a.transact(g => g);
+  await b.transact(g => creditMinute(g, midnight));
+  const { resetAllowance } = await import('../src/shared/care.js');
+  await b.transact(g => resetAllowance(g, midnight + 86400000));
+  await a.transact(g => creditMinute(g, previous));
+  const restored = await new FileGardenStore(path, () => { throw new Error('Must restore'); }).transact(g => g);
+  expect(restored).toMatchObject({ food: 0, editingMinutes: 1, earnedToday: 0 });
+});

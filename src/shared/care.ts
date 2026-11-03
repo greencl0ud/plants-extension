@@ -10,6 +10,8 @@ export interface Garden extends CareSummary {
   version: 1;
   plants: CarePlant[];
   earningDate: string;
+  // Closed-day totals let late credit use its original local day's allowance.
+  earningHistory?: { since: string; earned: Record<string, number> };
   lastCreditedMinute: number | null;
   // Retain identities for delayed retries; legacy saves only know a watermark.
   minuteCredits?: { legacyThrough: number | null; minutes: number[] };
@@ -22,6 +24,7 @@ export function migrateGarden(plants: SavedPlant[], now: number): Garden {
   return { version: 1, food: 0, editingMinutes: 0, earnedToday: 0,
     earningDate: localDate(now), lastCreditedMinute: null,
     minuteCredits: { legacyThrough: null, minutes: [] },
+    earningHistory: { since: localDate(now), earned: {} },
     plants: plants.map(plant => ({ ...plant, careStartedAt: now, lastFedAt: null, growthPoints: 0 })) };
 }
 export function presentPlant(plant: CarePlant, now: number): CarePlant {
@@ -33,18 +36,30 @@ export function presentPlant(plant: CarePlant, now: number): CarePlant {
 }
 export function resetAllowance(garden: Garden, now: number): Garden {
   const date = localDate(now);
-  return date > garden.earningDate ? { ...garden, earningDate: date, earnedToday: 0 } : garden;
+  if (date <= garden.earningDate) return garden;
+  const history = garden.earningHistory ?? { since: garden.earningDate, earned: {} };
+  return { ...garden, earningDate: date, earnedToday: 0,
+    earningHistory: { ...history, earned: { ...history.earned, [garden.earningDate]: garden.earnedToday } } };
 }
 export function creditMinute(saved: Garden, now: number): Garden {
   const garden = resetAllowance(saved, now);
+  const date = localDate(now);
+  const dailyHistory = garden.earningHistory ?? { since: garden.earningDate, earned: {} };
+  // Older legacy allowances are unknown; never charge them to today's balance.
+  if (date < dailyHistory.since) return garden;
+  const earned = date === garden.earningDate ? garden.earnedToday : dailyHistory.earned[date] ?? 0;
   const minute = Math.floor(now / 60000);
   const history = garden.minuteCredits ?? { legacyThrough: garden.lastCreditedMinute, minutes: [] };
-  if (garden.earnedToday >= 12 || (history.legacyThrough !== null && minute <= history.legacyThrough)
+  if (earned >= 12 || (history.legacyThrough !== null && minute <= history.legacyThrough)
     || history.minutes.includes(minute)) return garden;
   const progress = garden.editingMinutes + 1;
+  const foodEarned = progress === 5 ? 1 : 0;
   return { ...garden, lastCreditedMinute: Math.max(garden.lastCreditedMinute ?? minute, minute),
     minuteCredits: { ...history, minutes: [...history.minutes, minute] }, editingMinutes: progress % 5,
-    food: garden.food + (progress === 5 ? 1 : 0), earnedToday: garden.earnedToday + (progress === 5 ? 1 : 0) };
+    food: garden.food + foodEarned,
+    earnedToday: garden.earnedToday + (date === garden.earningDate ? foodEarned : 0),
+    earningHistory: date === garden.earningDate ? dailyHistory
+      : { ...dailyHistory, earned: { ...dailyHistory.earned, [date]: earned + foodEarned } } };
 }
 export function feedPlant(garden: Garden, id: PlantId, now: number): Garden {
   const plant = garden.plants.find(plant => plant.id === id);
@@ -63,6 +78,7 @@ export function isGarden(value: unknown): value is Garden {
   if (!isCareSummary(value)) return false;
   return data.version === 1 && typeof data.earningDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.earningDate)
     && (data.lastCreditedMinute === null || Number.isSafeInteger(data.lastCreditedMinute))
+    && (!('earningHistory' in data) || isEarningHistory(data.earningHistory, data.earningDate))
     && (!('minuteCredits' in data) || isMinuteCredits(data.minuteCredits, data.lastCreditedMinute))
     && isSavedShelf(data.plants) && data.plants.every(plant =>
       'careStartedAt' in plant && typeof plant.careStartedAt === 'number' && Number.isFinite(plant.careStartedAt)
@@ -79,4 +95,13 @@ function isMinuteCredits(value: unknown, latest: unknown): boolean {
     && Array.isArray(minutes) && new Set(minutes).size === minutes.length
     && minutes.every(minute => Number.isSafeInteger(minute) && typeof latest === 'number' && minute <= latest
       && (legacyThrough === null || (typeof legacyThrough === 'number' && minute > legacyThrough)));
+}
+
+function isEarningHistory(value: unknown, currentDate: string): boolean {
+  if (typeof value !== 'object' || value === null || !('since' in value) || !('earned' in value)) return false;
+  return typeof value.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.since) && value.since <= currentDate
+    && typeof value.earned === 'object' && value.earned !== null && !Array.isArray(value.earned)
+    && Object.entries(value.earned).every(([date, total]) => /^\d{4}-\d{2}-\d{2}$/.test(date)
+      && date >= String(value.since) && date < currentDate
+      && Number.isInteger(total) && typeof total === 'number' && total >= 0 && total <= 12);
 }

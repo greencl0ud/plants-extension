@@ -52,6 +52,46 @@ describe('editing credit', () => {
   });
 });
 
+describe('late editing credit across local dates', () => {
+  const midnight = new Date(2026, 9, 21).getTime();
+  const previous = midnight - 60000;
+  it('does not credit a capped prior-day edit against the new allowance', () => {
+    const capped = { ...migrateGarden([], previous), earnedToday: 12, editingMinutes: 0 };
+    const nextDay = resetAllowance(capped, midnight);
+    expect(creditMinute(nextDay, previous)).toBe(nextDay);
+  });
+  it('awards late prior-day food without changing the current daily allowance', () => {
+    const partial = { ...migrateGarden([], previous), editingMinutes: 4 };
+    const nextDay = { ...resetAllowance(partial, midnight), earnedToday: 12 };
+    const late = creditMinute(nextDay, previous);
+    expect(late).toMatchObject({ food: 1, editingMinutes: 0, earnedToday: 12,
+      earningDate: localDate(midnight) });
+    expect(isGarden(JSON.parse(JSON.stringify(late)))).toBe(true);
+    expect(creditMinute(late, previous)).toBe(late);
+  });
+  it('retains a historical daily cap across several rollovers and reloads', () => {
+    let garden = resetAllowance(migrateGarden([], now), midnight + 86400000);
+    for (let i = 0; i < 70; i++) garden = creditMinute(garden, now + i * 60000);
+    expect(garden).toMatchObject({ food: 12, editingMinutes: 0, earnedToday: 0 });
+    const restored = JSON.parse(JSON.stringify(garden));
+    expect(creditMinute(restored, now + 71 * 60000)).toEqual(garden);
+  });
+  it('does not invent an allowance for dates before a legacy save was upgraded', () => {
+    const { earningHistory: _history, ...legacy } = migrateGarden([], midnight);
+    void _history;
+    expect(creditMinute(legacy, previous)).toBe(legacy);
+  });
+  it('uses local calendar dates across a daylight-saving transition', () => {
+    const before = new Date(2026, 9, 24, 23, 59).getTime();
+    const after = new Date(2026, 9, 25, 2, 30).getTime();
+    const capped = { ...migrateGarden([], before), earnedToday: 12 };
+    const next = resetAllowance(capped, after);
+    expect(next.earningDate).toBe('2026-10-25');
+    expect(creditMinute(next, before)).toBe(next);
+    expect(creditMinute(next, after).editingMinutes).toBe(1);
+  });
+});
+
 describe('feeding and health', () => {
   it('migrates placeholder health to seven days of content with no food or growth', () => {
     const garden = migrateGarden([{ id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Thriving', value: 80 } }], now);
@@ -91,6 +131,8 @@ describe('feeding and health', () => {
     expect(isGarden(garden)).toBe(true);
     for (const invalid of [{ ...garden, minuteCredits: { legacyThrough: null, minutes: ['invalid'] } },
       { ...garden, minuteCredits: { legacyThrough: null, minutes: [1, 1] } },
+      { ...garden, earningHistory: { since: localDate(now), earned: { '2026-10-19': 13 } } },
+      { ...garden, earningHistory: { since: localDate(now), earned: [] } },
       { ...garden, food: -1 }, { ...garden, editingMinutes: 5 }, { ...garden, earnedToday: 13 },
       { ...garden, plants: [{ ...garden.plants[0], growthPoints: 16 }] },
       { ...garden, plants: [{ ...garden.plants[0], lastFedAt: 'yesterday' }] },

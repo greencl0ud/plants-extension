@@ -50,7 +50,10 @@ this prevents duplicate credit and lost food updates. Credited minute identities
 are retained locally so delayed retries from other windows can arrive out of order.
 This history grows by at most 60 credited minutes per earning day. Existing care
 saves retain their original deduplication watermark; minutes at or before that
-pre-upgrade watermark cannot be recovered. Original collection and
+pre-upgrade watermark cannot be recovered. Closed-day food totals are retained
+so delayed editing credit uses its original local day's allowance, even after
+another window advances the calendar. Allowances before the history began are
+unknown and are not credited against a newer day. Original collection and
 single-plant saves remain untouched after migration. A failed feeding leaves food
 and growth unchanged. Failed editing credit retries while the window remains open;
 credit that never saved can be lost when the window closes. Balances, minute credit,

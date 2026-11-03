@@ -146,3 +146,39 @@ it('adds several plants without closing, blocks owned plants, and focuses Close 
   const ids = Array.from(document.querySelectorAll('[id]')).map(element => element.id);
   expect(new Set(ids).size).toBe(ids.length);
 });
+
+it('shows shared food and editing progress, waits for saved feeding, and lets failures retry', async () => {
+  const user = userEvent.setup();
+  const plant = { id: 'stringle', addedAt: null, stage: 'Seedling', health: { label: 'Content', value: 2 / 3 * 100 }, growthPoints: 0 } as const;
+  const care = { food: 1, editingMinutes: 3, earnedToday: 1 };
+  const app = harness({ type: 'shelfState', plants: [plant], care });
+  expect(screen.getByText('1 food')).toBeTruthy();
+  expect(screen.getByText('3/5 editing minutes')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'View information about Stringle' }));
+  await user.click(screen.getByRole('button', { name: 'Feed · 1 food' }));
+  expect(app.send).toHaveBeenCalledWith({ type: 'feedPlant', plantId: 'stringle' });
+  expect(screen.getByText('1 food')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Saving…' })).toHaveProperty('disabled', true);
+  app.receive({ type: 'saveError' });
+  expect(screen.getByText(/Could not save feeding/)).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Feed · 1 food' }));
+  app.receive({ type: 'shelfState', fedPlantId: 'stringle', care: { ...care, food: 0 },
+    plants: [{ ...plant, growthPoints: 1, health: { label: 'Thriving', value: 100 } }] });
+  expect(screen.getByText('0 food')).toBeTruthy();
+  expect(screen.getByText('1/5 growth points toward Growing')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Feed · 1 food' })).toHaveProperty('disabled', true);
+  expect(screen.getByText(/2 more qualifying editing minutes/)).toBeTruthy();
+  app.receive({ type: 'earningError' });
+  expect(screen.getByText(/Could not save editing credit/)).toBeTruthy();
+});
+
+it('explains mature care and the daily earning cap', async () => {
+  const user = userEvent.setup();
+  harness({ type: 'shelfState', care: { food: 2, editingMinutes: 0, earnedToday: 12 },
+    plants: [{ id: 'stringle', addedAt: null, stage: 'Mature', growthPoints: 15, health: { label: 'Thriving', value: 100 } }] });
+  expect(screen.getByText('Daily earning limit reached')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'View information about Stringle' }));
+  expect(screen.getByRole('button', { name: 'Feed · 1 food' })).toHaveProperty('disabled', true);
+  expect(screen.getByText('Fully grown and thriving. No food needed.')).toBeTruthy();
+  expect(screen.getByText(/Further growth is unavailable/)).toBeTruthy();
+});

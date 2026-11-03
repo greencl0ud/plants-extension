@@ -1,20 +1,14 @@
 import { expect, it, vi } from 'vitest';
 import type * as VSCode from 'vscode';
 import { ShelfViewProvider } from '../src/extension/ShelfViewProvider.js';
-import { INITIAL_HEALTH, type SavedPlant } from '../src/shared/plants.js';
+import { addPlant, migrateGarden, type Garden } from '../src/shared/care.js';
 
-const legacy: SavedPlant = { id: 'stringle', addedAt: '2026-10-01T12:00:00.000Z', stage: 'Seedling', health: INITIAL_HEALTH };
-function provider(saved: unknown = undefined, fail = false, collection?: unknown) {
-  const values = new Map<string, unknown>([['selectedPlant', saved]]);
-  if (collection !== undefined) values.set('shelfPlants', collection);
+function provider(initial = migrateGarden([], Date.now())) {
+  let saved = initial;
   let receive: (message: unknown) => Promise<void> = async () => {};
   const dispose = vi.fn();
   let onDispose = () => {};
-  const update = vi.fn(async (key: string, next: unknown) => {
-    if (fail) throw new Error('Save failed');
-    values.set(key, next);
-  });
-  const state = { get: (key: string) => values.get(key), update, keys: () => [...values.keys()] } as unknown as VSCode.Memento;
+  const transact = vi.fn(async (change: (garden: Garden) => Garden) => { saved = change(saved); return saved; });
   const postMessage = vi.fn(async () => true);
   const webview = {
     options: {}, html: '', cspSource: 'https://*.vscode-cdn.net',
@@ -23,62 +17,49 @@ function provider(saved: unknown = undefined, fail = false, collection?: unknown
     onDidReceiveMessage: (listener: typeof receive) => { receive = listener; return { dispose }; },
   };
   const view = { webview, onDidDispose: (listener: () => void) => { onDispose = listener; } };
-  new ShelfViewProvider({ toString: () => 'extension' } as VSCode.Uri, state)
-    .resolveWebviewView(view as unknown as VSCode.WebviewView);
-  return { values, webview, postMessage, update, receive: (message: unknown) => receive(message), dispose, close: () => onDispose() };
+  const instance = new ShelfViewProvider({ toString: () => 'extension' } as VSCode.Uri, { transact });
+  instance.resolveWebviewView(view as unknown as VSCode.WebviewView);
+  return { saved: () => saved, instance, webview, postMessage, transact, receive: (message: unknown) => receive(message), dispose, close: () => onDispose() };
 }
 
-it.each(['stringle', legacy])('migrates legacy save %j once while retaining the original', async saved => {
-  const app = provider(saved);
+it('serializes overlapping additions and preserves dates and uniqueness', async () => {
+  const app = provider();
+  await Promise.all(['stringle', 'pricklepop', 'pricklepop', 'pebblebloom'].map(plantId => app.receive({ type: 'addPlant', plantId })));
+  expect(app.saved().plants.map(plant => plant.id)).toEqual(['stringle', 'pricklepop', 'pebblebloom']);
+  expect(app.saved().plants.every(plant => plant.addedAt && plant.growthPoints === 0)).toBe(true);
   await app.receive({ type: 'ready' });
-  const expected = typeof saved === 'string' ? { ...legacy, addedAt: null } : legacy;
-  expect(app.values.get('shelfPlants')).toEqual([expected]);
-  expect(app.values.get('selectedPlant')).toEqual(saved);
-  await app.receive({ type: 'ready' });
-  expect(app.update).toHaveBeenCalledOnce();
-  expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plants: [expected] });
+  expect(app.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'shelfState', care: { food: 0, editingMinutes: 0, earnedToday: 0 } }));
 });
-it('preserves legacy data on failed migration and can retry', async () => {
-  const app = provider(legacy, true);
-  await app.receive({ type: 'ready' });
-  expect(app.values.get('selectedPlant')).toEqual(legacy);
-  expect(app.values.has('shelfPlants')).toBe(false);
-  expect(app.postMessage).toHaveBeenCalledWith({ type: 'shelfState', plants: [legacy] });
+it('leaves food and growth unchanged after a failed feeding and allows retry', async () => {
+  const garden = { ...addPlant(migrateGarden([], Date.now()), 'stringle', Date.now()), food: 1 };
+  const app = provider(garden);
+  app.transact.mockRejectedValueOnce(new Error('Disk full'));
+  await app.receive({ type: 'feedPlant', plantId: 'stringle' });
+  expect(app.saved()).toEqual(garden);
   expect(app.postMessage).toHaveBeenLastCalledWith({ type: 'saveError' });
-  const retry = provider(app.values.get('selectedPlant'));
-  await retry.receive({ type: 'ready' });
-  expect(retry.values.get('shelfPlants')).toEqual([legacy]);
+  await app.receive({ type: 'feedPlant', plantId: 'stringle' });
+  expect(app.saved()).toMatchObject({ food: 0, plants: [{ growthPoints: 1 }] });
+  expect(app.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ fedPlantId: 'stringle' }));
 });
-it('serializes overlapping additions, rejects duplicates, and preserves order and dates', async () => {
-  const app = provider(legacy);
-  await Promise.all([
-    app.receive({ type: 'addPlant', plantId: 'pricklepop' }),
-    app.receive({ type: 'addPlant', plantId: 'pricklepop' }),
-    app.receive({ type: 'addPlant', plantId: 'pebblebloom' }),
-    app.receive({ type: 'addPlant', plantId: 'stringle' }),
-  ]);
-  const saved = app.values.get('shelfPlants') as SavedPlant[];
-  expect(saved.map(plant => plant.id)).toEqual(['stringle', 'pricklepop', 'pebblebloom']);
-  expect(saved[0]).toEqual(legacy);
-  expect(saved[1]?.addedAt).toEqual(expect.any(String));
-  expect(app.update).toHaveBeenCalledTimes(2);
-  const restored = provider(undefined, false, saved);
-  await restored.receive({ type: 'ready' });
-  expect(restored.postMessage).toHaveBeenLastCalledWith({ type: 'shelfState', plants: saved });
-  expect(restored.update).not.toHaveBeenCalled();
+it('retries failed editing credit and does not multiply a minute', async () => {
+  const app = provider();
+  app.transact.mockRejectedValueOnce(new Error('Disk full'));
+  app.instance.credit(1800000000000);
+  await app.instance.refresh();
+  expect(app.postMessage).toHaveBeenCalledWith({ type: 'earningError' });
+  await app.instance.retryCredits();
+  expect(app.saved().editingMinutes).toBe(1);
+  app.instance.credit(1800000000001);
+  await app.instance.refresh();
+  expect(app.saved().editingMinutes).toBe(1);
 });
-it('does not publish additions when persistence fails', async () => {
-  const app = provider(undefined, true, [legacy]);
-  await app.receive({ type: 'addPlant', plantId: 'pricklepop' });
-  expect(app.values.get('shelfPlants')).toEqual([legacy]);
-  expect(app.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'saveError' });
-});
-it('rejects unsupported commands and protects invalid collection saves', async () => {
-  const app = provider(undefined, false, [legacy, legacy]);
-  await app.receive({ type: 'addPlant', plantId: 'dangleleaf' });
-  await app.receive({ type: 'addPlant', plantId: 'pricklepop' });
-  expect(app.update).not.toHaveBeenCalled();
-  expect(app.values.get('shelfPlants')).toEqual([legacy, legacy]);
+it('does not publish an addition on failed persistence and rejects unsupported commands', async () => {
+  const app = provider();
+  await app.receive({ type: 'feedPlant', plantId: 'dangleleaf' });
+  expect(app.transact).not.toHaveBeenCalled();
+  app.transact.mockRejectedValueOnce(new Error('Disk full'));
+  await app.receive({ type: 'addPlant', plantId: 'stringle' });
+  expect(app.saved().plants).toEqual([]);
   expect(app.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'saveError' });
 });
 it('retains CSP and resource restrictions and disposes listeners', () => {
@@ -89,20 +70,4 @@ it('retains CSP and resource restrictions and disposes listeners', () => {
   expect(app.webview.options).toMatchObject({ enableScripts: true, localResourceRoots: expect.any(Array) });
   app.close();
   expect(app.dispose).toHaveBeenCalledOnce();
-});
-
-it('waits for an in-flight save and continues processing after a failure', async () => {
-  const app = provider();
-  let release = () => {};
-  const gate = new Promise<void>(resolve => { release = resolve; });
-  app.update.mockImplementationOnce(async () => { await gate; throw new Error('Save failed'); });
-  const first = app.receive({ type: 'addPlant', plantId: 'stringle' });
-  const second = app.receive({ type: 'addPlant', plantId: 'pricklepop' });
-  await Promise.resolve();
-  expect(app.update).toHaveBeenCalledOnce();
-  expect(app.postMessage).not.toHaveBeenCalled();
-  release();
-  await Promise.all([first, second]);
-  expect(app.postMessage).toHaveBeenCalledWith({ type: 'saveError' });
-  expect(app.values.get('shelfPlants')).toEqual([expect.objectContaining({ id: 'pricklepop' })]);
 });

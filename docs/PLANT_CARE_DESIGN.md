@@ -1,6 +1,6 @@
 # Plant care design
 
-Status: confirmed implementation specification (14 October 2026). These rules are not implemented yet.
+Status: confirmed implementation specification (14 October 2026). Implemented in the first care milestone; stage-specific artwork remains pending.
 
 ## Agreed rules
 
@@ -83,5 +83,4 @@ It retains existing plant artwork. Removal, rearranging, watering, new stages,
 cosmetic rewards, and activity telemetry are outside this milestone.
 
 All interview decisions and the first-release scope were confirmed on 14 October
-2026. This document is the agreed implementation specification. Implementation
-remains pending a separate request.
+2026. This document is the agreed implementation specification. Implemented following the plant-care request on 3 November 2026.

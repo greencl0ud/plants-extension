@@ -1,67 +1,98 @@
 import { randomBytes } from 'node:crypto';
 import { serializeBootstrap, type BootstrapData } from '../shared/bootstrap.js';
 import * as vscode from 'vscode';
-import { plants, INITIAL_HEALTH, restorePlant, isWebviewMessage, isSavedShelf, type SavedPlant, type ShelfMessage } from '../shared/plants.js';
+import { plants, isWebviewMessage, type ShelfMessage, type PlantId } from '../shared/plants.js';
+
+import { addPlant, feedPlant, creditMinute, presentPlant, resetAllowance, type Garden } from '../shared/care.js';
+import type { GardenStore } from './GardenStore.js';
 
 export class ShelfViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codePlants.shelf';
   private pending: Promise<void> = Promise.resolve();
-
-  private readShelf(): SavedPlant[] {
-    const saved = this.workspaceState.get<unknown>('shelfPlants');
-    if (saved !== undefined) {
-      if (!isSavedShelf(saved)) throw new Error('Invalid saved shelf');
-      return saved;
-    }
-    const legacy = restorePlant(this.workspaceState.get<unknown>('selectedPlant'));
-    return legacy ? [legacy] : [];
-  }
-
+  private views = new Set<vscode.Webview>();
+  private credits = new Set<number>();
+  private retrying = false;
+  private earningFailed = false;
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly workspaceState: vscode.Memento,
+    private readonly store: GardenStore,
   ) {}
 
+  private async publish(garden: Garden, fedPlantId?: PlantId): Promise<void> {
+    const now = Date.now();
+    const response: ShelfMessage = { type: 'shelfState', ...(fedPlantId ? { fedPlantId } : {}),
+      plants: garden.plants.map(plant => presentPlant(plant, now)),
+      care: { food: garden.food, editingMinutes: garden.editingMinutes, earnedToday: garden.earnedToday } };
+    await Promise.all([...this.views].map(view => view.postMessage(response)));
+    if (this.earningFailed) await this.broadcast({ type: 'earningError' });
+  }
+  private async broadcast(message: ShelfMessage): Promise<void> {
+    await Promise.all([...this.views].map(view => view.postMessage(message)));
+  }
+  private enqueue(work: () => Promise<void>): Promise<void> {
+    const operation = this.pending.catch(() => {}).then(work);
+    this.pending = operation;
+    return operation;
+  }
+  private async transact(change: (garden: Garden) => Garden): Promise<Garden> {
+    // Drain unsaved credit before advancing the calendar or spending food.
+    const times = [...this.credits].sort((a, b) => a - b);
+    try {
+      const garden = await this.store.transact(garden => change(times.reduce(creditMinute, garden)));
+      times.forEach(time => this.credits.delete(time));
+      this.earningFailed = false;
+      return garden;
+    } catch (error) {
+      if (times.length) this.earningFailed = true;
+      throw error;
+    }
+  }
+  public async refresh(): Promise<void> {
+    await this.enqueue(async () => {
+      try { await this.publish(await this.transact(garden => resetAllowance(garden, Date.now()))); }
+      catch { await this.broadcast({ type: this.earningFailed ? 'earningError' : 'saveError' }); }
+    });
+  }
+  public credit(now: number): void {
+    // Preserve the first edit time in each fixed minute while a save retries.
+    if (![...this.credits].some(time => Math.floor(time / 60000) === Math.floor(now / 60000))) this.credits.add(now);
+    void this.retryCredits();
+  }
+  public async retryCredits(): Promise<void> {
+    if (this.retrying || this.credits.size === 0) return;
+    this.retrying = true;
+    try {
+      await this.enqueue(async () => {
+        try {
+          const garden = await this.transact(garden => garden);
+          await this.publish(garden);
+        } catch {
+          this.earningFailed = true;
+          await this.broadcast({ type: 'earningError' });
+        }
+      });
+    } finally { this.retrying = false; }
+  }
   public resolveWebviewView(view: vscode.WebviewView): void {
     const webview = view.webview;
+    this.views.add(webview);
     const listener = webview.onDidReceiveMessage(async (message: unknown) => {
       if (!isWebviewMessage(message)) return;
-      // Serialize read-modify-write operations, including requests from replaced views.
-      const previous = this.pending;
-      let release = () => {};
-      this.pending = new Promise<void>(resolve => { release = resolve; });
-      await previous;
-      try {
-        let shelf = this.readShelf();
-        const needsMigration = this.workspaceState.get<unknown>('shelfPlants') === undefined
-          && shelf.length > 0;
-        if (message.type === 'addPlant' && !shelf.some(plant => plant.id === message.plantId)) {
-          const next: SavedPlant[] = [...shelf, {
-            id: message.plantId, addedAt: new Date().toISOString(), stage: 'Seedling', health: INITIAL_HEALTH,
-          }];
-          await this.workspaceState.update('shelfPlants', next);
-          shelf = next;
-        } else if (needsMigration) {
-          // Keep the legacy key intact, including when this write fails.
-          await this.workspaceState.update('shelfPlants', shelf);
-        }
-        const response: ShelfMessage = { type: 'shelfState', plants: shelf };
-        await webview.postMessage(response);
-      } catch {
-        if (message.type === 'ready') {
-          try {
-            const response: ShelfMessage = { type: 'shelfState', plants: this.readShelf() };
-            await webview.postMessage(response);
-          } catch { /* Do not overwrite an invalid save. */ }
-        }
-        const error: ShelfMessage = { type: 'saveError' };
-        await webview.postMessage(error);
-      } finally {
-        release();
-      }
+      await this.enqueue(async () => {
+        try {
+          const now = Date.now();
+          const garden = await this.transact(saved => {
+            const current = resetAllowance(saved, now);
+            if (message.type === 'addPlant') return addPlant(current, message.plantId, now);
+            if (message.type === 'feedPlant') return feedPlant(current, message.plantId, now);
+            return current;
+          });
+          await this.publish(garden, message.type === 'feedPlant' ? message.plantId : undefined);
+        } catch { await webview.postMessage({ type: 'saveError' } satisfies ShelfMessage); }
+      });
     });
-    view.onDidDispose(() => listener.dispose());
+    view.onDidDispose(() => { listener.dispose(); this.views.delete(webview); });
     const bundleRoot = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     const shelfRoot = vscode.Uri.joinPath(this.extensionUri, 'assets', 'shelves');
     const backgroundRoot = vscode.Uri.joinPath(this.extensionUri, 'assets', 'backgrounds');

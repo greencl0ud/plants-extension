@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { getPlant, plantArtworkBounds, type SavedPlant } from '../../shared/plants.js';
+import { getPlant, plantArtworkBounds, type CareSummary, type PlantId, type SavedPlant } from '../../shared/plants.js';
 
-export function PlantInfoCard({ plant, artwork, open, onOpenChange }: {
+export function PlantInfoCard({ plant, artwork, open, onOpenChange, care, onFeed, feedingPending, careError }: {
   plant: SavedPlant; artwork: string; open: boolean; onOpenChange: (open: boolean) => void;
+  care?: CareSummary; onFeed?: (id: PlantId) => void; feedingPending?: boolean; careError?: string;
 }) {
   const definition = getPlant(plant.id);
   const setOpen = useCallback((value: boolean) => onOpenChange(value), [onOpenChange]);
@@ -69,6 +70,16 @@ export function PlantInfoCard({ plant, artwork, open, onOpenChange }: {
   }, [open, position.maxWidth, position.maxHeight]);
   const date = plant.addedAt === null ? 'unknown'
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(plant.addedAt));
+  const points = plant.growthPoints ?? 0;
+  const mature = points >= 15;
+  const nextStage = points < 5 ? 'Growing' : 'Mature';
+  const target = points < 5 ? 5 : 15;
+  const full = mature && plant.health.label === 'Thriving';
+  const noFood = care?.food === 0;
+  const hint = full ? 'Fully grown and thriving. No food needed.' : noFood
+    ? care.earnedToday >= 12 ? 'Daily earning limit reached. Earn more food tomorrow.'
+      : `${5 - care.editingMinutes} more qualifying editing ${5 - care.editingMinutes === 1 ? 'minute' : 'minutes'} to earn food. Five editing minutes earn one food.`
+    : 'One food refreshes health for seven days and adds one growth point.';
   return <>
     <button ref={trigger} className="shelf-plant plant-info-trigger" type="button"
       aria-label={`View information about ${definition.name}`} aria-expanded={open}
@@ -98,6 +109,17 @@ export function PlantInfoCard({ plant, artwork, open, onOpenChange }: {
         <div><dt id={`${infoId}-health`}>Health</dt><dd>{plant.health.label}</dd></div></dl>
       <meter min={0} max={100} value={plant.health.value} aria-labelledby={`${infoId}-health`}
         aria-valuetext={plant.health.label}>{plant.health.label}</meter>
+      {care && <div className="plant-care">
+        <p id={`${infoId}-growth`}>{mature ? 'Fully grown · 15/15 growth points' : `${points}/${target} growth points toward ${nextStage}`}</p>
+        <progress max={target} value={points} aria-labelledby={`${infoId}-growth`} />
+        {mature && <p>Further growth is unavailable. Feed when content or resting to refresh health.</p>}
+        <button type="button" disabled={feedingPending || noFood || full}
+          aria-describedby={`${infoId}-feed-hint`} onClick={() => onFeed?.(plant.id)}>
+          {feedingPending ? 'Saving…' : 'Feed · 1 food'}
+        </button>
+        <p id={`${infoId}-feed-hint`}>{hint}</p>
+        <p role="status">{careError}</p>
+      </div>}
     </section>, document.body)}
   </>;
 }

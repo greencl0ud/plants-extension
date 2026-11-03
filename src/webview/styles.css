@@ -461,3 +461,13 @@ button.plant-card:disabled .plant-status {
   border-radius: 8px;
   min-width: 24px;
 }
+
+.shelf-actions { gap: 8px; flex-wrap: wrap; align-items: flex-start; max-height: 50%; overflow: auto; }
+.care-summary { display: grid; gap: 2px; min-width: 0; flex: 1; padding: 4px 6px;
+  color: var(--color-text); background: var(--color-soft-cream); border-radius: 6px; overflow-wrap: anywhere; }
+.plant-info { width: min(220px, calc(100vw - 16px)); }
+.plant-care { margin-top: 10px; }
+.plant-care progress { width: 100%; accent-color: var(--color-forest-green); }
+.plant-care button { width: 100%; margin-top: 8px; }
+.plant-care button:disabled { opacity: 1; color: var(--color-text); background: var(--color-soft-cream); border-style: dashed; }
+.care-error { color: var(--color-text); background: var(--color-soft-cream); margin: 0; padding: 6px; overflow: auto; }

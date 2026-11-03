@@ -48,7 +48,8 @@ Care saves are local and workspace-specific. Windows sharing a workspace use one
 locked, atomically replaced garden file in VS Code’s extension workspace storage;
 this prevents duplicate credit and lost food updates. Original collection and
 single-plant saves remain untouched after migration. A failed feeding leaves food
-and growth unchanged. Failed editing credit retries while the window remains open;
+and growth unchanged. If another window has already spent the food or fed a mature
+plant, the shelf refreshes and explains why the feeding was not applied. Failed editing credit retries while the window remains open;
 credit that never saved can be lost when the window closes. Balances, minute credit,
 and care timestamps are stored; code contents and file names are never recorded.
 No activity telemetry or reward pop-ups are used.

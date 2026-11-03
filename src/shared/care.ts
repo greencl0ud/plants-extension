@@ -1,4 +1,4 @@
-import { isSavedShelf, isCareSummary, type SavedPlant, type PlantId, type CareSummary } from './plants.js';
+import { isSavedShelf, isCareSummary, type SavedPlant, type PlantId, type CareSummary, type FeedRejection } from './plants.js';
 
 const WEEK = 168 * 60 * 60 * 1000;
 export interface CarePlant extends SavedPlant {
@@ -40,9 +40,14 @@ export function creditMinute(saved: Garden, now: number): Garden {
   return { ...garden, lastCreditedMinute: minute, editingMinutes: progress % 5,
     food: garden.food + (progress === 5 ? 1 : 0), earnedToday: garden.earnedToday + (progress === 5 ? 1 : 0) };
 }
-export function feedPlant(garden: Garden, id: PlantId, now: number): Garden {
+export function getFeedRejection(garden: Garden, id: PlantId, now: number): FeedRejection | null {
   const plant = garden.plants.find(plant => plant.id === id);
-  if (!plant || garden.food < 1 || (plant.growthPoints >= 15 && presentPlant(plant, now).health.label === 'Thriving')) return garden;
+  if (!plant) return 'notOwned';
+  if (garden.food < 1) return 'noFood';
+  return plant.growthPoints >= 15 && presentPlant(plant, now).health.label === 'Thriving' ? 'alreadyThriving' : null;
+}
+export function feedPlant(garden: Garden, id: PlantId, now: number): Garden {
+  if (getFeedRejection(garden, id, now)) return garden;
   return { ...garden, food: garden.food - 1, plants: garden.plants.map(plant => plant.id === id
     ? presentPlant({ ...plant, lastFedAt: now, growthPoints: Math.min(15, plant.growthPoints + 1) }, now) : plant) };
 }

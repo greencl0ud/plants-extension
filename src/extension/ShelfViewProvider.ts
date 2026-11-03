@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { serializeBootstrap, type BootstrapData } from '../shared/bootstrap.js';
 import * as vscode from 'vscode';
-import { plants, isWebviewMessage, type ShelfMessage, type PlantId } from '../shared/plants.js';
+import { plants, isWebviewMessage, type ShelfMessage } from '../shared/plants.js';
 
-import { addPlant, feedPlant, creditMinute, presentPlant, resetAllowance, type Garden } from '../shared/care.js';
+import { addPlant, feedPlant, getFeedRejection, creditMinute, presentPlant, resetAllowance, type Garden } from '../shared/care.js';
 import type { GardenStore } from './GardenStore.js';
 
 export class ShelfViewProvider implements vscode.WebviewViewProvider {
@@ -19,9 +19,9 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
     private readonly store: GardenStore,
   ) {}
 
-  private async publish(garden: Garden, fedPlantId?: PlantId): Promise<void> {
+  private async publish(garden: Garden): Promise<void> {
     const now = Date.now();
-    const response: ShelfMessage = { type: 'shelfState', ...(fedPlantId ? { fedPlantId } : {}),
+    const response: ShelfMessage = { type: 'shelfState',
       plants: garden.plants.map(plant => presentPlant(plant, now)),
       care: { food: garden.food, editingMinutes: garden.editingMinutes, earnedToday: garden.earnedToday } };
     await Promise.all([...this.views].map(view => view.postMessage(response)));
@@ -82,13 +82,20 @@ export class ShelfViewProvider implements vscode.WebviewViewProvider {
       await this.enqueue(async () => {
         try {
           const now = Date.now();
+          let feedResult: Extract<ShelfMessage, { type: 'feedResult' }> | undefined;
           const garden = await this.transact(saved => {
             const current = resetAllowance(saved, now);
             if (message.type === 'addPlant') return addPlant(current, message.plantId, now);
-            if (message.type === 'feedPlant') return feedPlant(current, message.plantId, now);
+            if (message.type === 'feedPlant') {
+              const rejection = getFeedRejection(current, message.plantId, now);
+              feedResult = { type: 'feedResult', plantId: message.plantId, outcome: rejection ?? 'fed' };
+              return feedPlant(current, message.plantId, now);
+            }
             return current;
           });
-          await this.publish(garden, message.type === 'feedPlant' ? message.plantId : undefined);
+          await this.publish(garden);
+          // Operation results belong to the requesting view, not other views with stale state.
+          if (feedResult) await webview.postMessage(feedResult);
         } catch { await webview.postMessage({ type: 'saveError' } satisfies ShelfMessage); }
       });
     });

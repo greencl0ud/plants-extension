@@ -162,8 +162,10 @@ it('shows shared food and editing progress, waits for saved feeding, and lets fa
   app.receive({ type: 'saveError' });
   expect(screen.getByText(/Could not save feeding/)).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Feed · 1 food' }));
-  app.receive({ type: 'shelfState', fedPlantId: 'stringle', care: { ...care, food: 0 },
+  app.receive({ type: 'shelfState', care: { ...care, food: 0 },
     plants: [{ ...plant, growthPoints: 1, health: { label: 'Thriving', value: 100 } }] });
+  expect(screen.getByRole('button', { name: 'Saving…' })).toHaveProperty('disabled', true);
+  app.receive({ type: 'feedResult', plantId: 'stringle', outcome: 'fed' });
   expect(screen.getByText('0 food')).toBeTruthy();
   expect(screen.getByText('1/5 growth points toward Growing')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Feed · 1 food' })).toHaveProperty('disabled', true);
@@ -181,4 +183,31 @@ it('explains mature care and the daily earning cap', async () => {
   expect(screen.getByRole('button', { name: 'Feed · 1 food' })).toHaveProperty('disabled', true);
   expect(screen.getByText('Fully grown and thriving. No food needed.')).toBeTruthy();
   expect(screen.getByText(/Further growth is unavailable/)).toBeTruthy();
+});
+
+it.each([
+  { outcome: 'noFood', feedback: /No food available/ },
+  { outcome: 'alreadyThriving', feedback: /fully grown and already thriving/ },
+] as const)('explains a rejected feeding and clears pending state: $outcome', async ({ outcome, feedback }) => {
+  const user = userEvent.setup();
+  const plant = { id: 'stringle', addedAt: null, stage: 'Growing', growthPoints: 14,
+    health: { label: 'Content', value: 2 / 3 * 100 } } as const;
+  const care = { food: 1, editingMinutes: 0, earnedToday: 0 };
+  const app = harness({ type: 'shelfState', plants: [plant], care });
+  await user.click(screen.getByRole('button', { name: 'View information about Stringle' }));
+  await user.click(screen.getByRole('button', { name: 'Feed · 1 food' }));
+  app.receive({ type: 'feedResult', plantId: 'pricklepop', outcome: 'fed' });
+  expect(screen.getByRole('button', { name: 'Saving…' })).toBeTruthy();
+  app.receive({ type: 'shelfState', plants: outcome === 'alreadyThriving'
+    ? [{ ...plant, stage: 'Mature', growthPoints: 15, health: { label: 'Thriving', value: 100 } }] : [plant],
+    care: outcome === 'noFood' ? { ...care, food: 0 } : care });
+  expect(screen.getByRole('button', { name: 'Saving…' })).toBeTruthy();
+  app.receive({ type: 'feedResult', plantId: 'stringle', outcome });
+  expect(screen.getByText(feedback)).toBeTruthy();
+  expect(screen.queryByText('Stringle care saved.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Feed · 1 food' })).toHaveProperty('disabled', true);
+  app.receive({ type: 'shelfState', plants: [plant], care });
+  await user.click(screen.getByRole('button', { name: 'Feed · 1 food' }));
+  expect(app.send.mock.calls.filter(([message]) => message.type === 'feedPlant')).toHaveLength(2);
+  expect(screen.queryByText(feedback)).toBeNull();
 });

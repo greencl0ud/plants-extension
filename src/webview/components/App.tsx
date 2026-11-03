@@ -28,6 +28,20 @@ export function App({ assets, messaging }: { assets: BootstrapData; messaging: S
   }, []);
   useEffect(() => {
     const unsubscribe = messaging.subscribe((message) => {
+      if (message.type === 'feedResult') {
+        if (feeding.current !== message.plantId) return;
+        feeding.current = null;
+        setFeedingPending(false);
+        if (message.outcome === 'fed') {
+          setCareError('');
+          setAnnouncement(`${getPlant(message.plantId).name} care saved.`);
+        } else {
+          setCareError(message.outcome === 'noFood' ? 'No food available. Your shelf has been refreshed.'
+            : message.outcome === 'alreadyThriving' ? 'This plant is fully grown and already thriving. No food was spent.'
+              : 'This plant is no longer on your shelf. No food was spent.');
+        }
+        return;
+      }
       if (message.type === 'earningError') {
         setEarningError('Could not save editing credit. Retrying while this window is open.');
         return;
@@ -47,11 +61,6 @@ export function App({ assets, messaging }: { assets: BootstrapData; messaging: S
       setShelf(message.plants);
       setCare(message.care);
       setEarningError('');
-      if (message.fedPlantId && feeding.current === message.fedPlantId) {
-        feeding.current = null;
-        setFeedingPending(false);
-        setAnnouncement(`${getPlant(message.fedPlantId).name} care saved.`);
-      }
       if (selecting.current && message.plants.some(plant => plant.id === selecting.current)) {
         const id = selecting.current;
         selecting.current = null;

@@ -53,3 +53,32 @@ it('migrates collection and legacy saves once, retains the old keys, and protect
   const invalid = { get: () => [original, original] } as unknown as import('vscode').Memento;
   expect(() => migrateLegacyGarden(invalid, now)).toThrow('Invalid saved shelf');
 });
+
+it('retries an older failed window credit after another window saves a newer minute', async () => {
+  const { ShelfViewProvider } = await import('../src/extension/ShelfViewProvider.js');
+  const path = await location();
+  const first = new Date(2026, 10, 3, 10).getTime();
+  const a = new FileGardenStore(path, () => migrateGarden([], first));
+  const b = new FileGardenStore(path, () => migrateGarden([], first));
+  const uri = {} as import('vscode').Uri;
+  let fail = true;
+  let notifyFailure = () => {};
+  const failed = new Promise<void>(resolve => { notifyFailure = resolve; });
+  const windowA = new ShelfViewProvider(uri, { async transact(change) {
+    if (fail) { notifyFailure(); throw new Error('Disk unavailable'); }
+    return a.transact(change);
+  } });
+  const windowB = new ShelfViewProvider(uri, b);
+  windowA.credit(first);
+  await failed;
+  windowB.credit(first + 60000);
+  await windowB.refresh();
+  fail = false;
+  await windowA.refresh();
+  const reloaded = new FileGardenStore(path, () => { throw new Error('Must restore'); });
+  expect((await reloaded.transact(g => g)).editingMinutes).toBe(2);
+  windowA.credit(first + 1000);
+  windowB.credit(first + 61000);
+  await Promise.all([windowA.refresh(), windowB.refresh()]);
+  expect((await reloaded.transact(g => g)).editingMinutes).toBe(2);
+});

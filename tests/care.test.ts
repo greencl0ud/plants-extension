@@ -29,9 +29,26 @@ describe('editing credit', () => {
     expect(next).toMatchObject({ food: 12, earnedToday: 0, editingMinutes: 4, earningDate: localDate(now + 24 * 3600000) });
     expect(creditMinute(next, now + 24 * 3600000 + 60000).food).toBe(13);
   });
-  it('does not award extra credit after a backward clock change', () => {
-    const garden = creditMinute(empty(), now);
+  it('does not award duplicate credit after a backward clock change', () => {
+    const garden = creditMinute(creditMinute(empty(), now - 60000), now);
     expect(creditMinute(garden, now - 60000)).toBe(garden);
+  });
+  it('credits an older failed minute after a newer minute was saved, once across reloads', () => {
+    const newer = creditMinute(empty(), now + 60000);
+    const retried = creditMinute(newer, now);
+    expect(retried.editingMinutes).toBe(2);
+    const restored = JSON.parse(JSON.stringify(retried));
+    expect(creditMinute(restored, now + 1000)).toEqual(retried);
+    expect(creditMinute(restored, now + 61000)).toEqual(retried);
+    expect(retried.lastCreditedMinute).toBe(Math.floor((now + 60000) / 60000));
+  });
+  it('preserves the legacy watermark when upgrading saves without minute identities', () => {
+    const { minuteCredits: _history, ...legacy } = creditMinute(empty(), now);
+    void _history;
+    expect(creditMinute(legacy, now - 60000)).toBe(legacy);
+    const upgraded = creditMinute(legacy, now + 120000);
+    expect(creditMinute(upgraded, now + 60000).editingMinutes).toBe(3);
+    expect(creditMinute(upgraded, now)).toBe(upgraded);
   });
 });
 
@@ -72,7 +89,9 @@ describe('feeding and health', () => {
   it('validates persisted care data', () => {
     const garden = planted();
     expect(isGarden(garden)).toBe(true);
-    for (const invalid of [{ ...garden, food: -1 }, { ...garden, editingMinutes: 5 }, { ...garden, earnedToday: 13 },
+    for (const invalid of [{ ...garden, minuteCredits: { legacyThrough: null, minutes: ['invalid'] } },
+      { ...garden, minuteCredits: { legacyThrough: null, minutes: [1, 1] } },
+      { ...garden, food: -1 }, { ...garden, editingMinutes: 5 }, { ...garden, earnedToday: 13 },
       { ...garden, plants: [{ ...garden.plants[0], growthPoints: 16 }] },
       { ...garden, plants: [{ ...garden.plants[0], lastFedAt: 'yesterday' }] },
       { ...garden, plants: [{ ...garden.plants[0], careStartedAt: null }] }]) expect(isGarden(invalid)).toBe(false);

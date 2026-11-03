@@ -86,6 +86,7 @@ Reload that window to refresh webview changes too. Watch bundles code; run
 - `npm run typecheck`: check extension, browser, and test TypeScript separately.
 - `npm run lint`: lint source files, tests, and test configuration, including webview React hook rules.
 - `npm test`: run the Vitest unit and React component tests.
+- `npm run test:extension`: build and run isolated real VS Code activation and webview smoke tests.
 - `npm run vscode:prepublish`: check types, lint, and build minified production bundles.
 
 ## React webview
@@ -143,3 +144,30 @@ and `assets/backgrounds/`, plus `assets/plants/` for the dialog preview.
 The original shelf SVG is preserved; explicit display dimensions follow its
 800 × 500 viewBox. The plant pot base and shelf surface share scene coordinates.
 Supplied plant artwork is preserved.
+
+## Automated Extension Development Host checks
+
+Run `npm run test:extension` from a graphical desktop session. The runner downloads
+and caches VS Code **1.100.3** in `.vscode-test/` on first use (network access is
+required), then opens two development hosts in sequence. No separate Playwright
+browser download is needed: Playwright connects to VS Code’s Chromium instance.
+On headless Linux, provide a display, for example with `xvfb-run -a npm run test:extension`.
+
+The first host verifies actual extension activation and reveals Plant Shelf through
+the VS Code API. UI automation waits for the real webview and its artwork, opens
+the Plants dialog, and adds Stringle. A second host reuses the same temporary
+workspace and profile to verify restoration and owned-card availability, then
+checks Escape dismissal and focus restoration. These checks exercise real messaging and file persistence;
+they do not use the Vitest VS Code mock.
+
+Each run creates its own workspace, profile, and extensions directory in the OS
+temporary directory. Your normal VS Code profile and garden are not used. The
+runner closes hosts and removes temporary data after success or failure. Each
+session has bounded waits and a two-minute watchdog. Logs and diagnostic screenshots
+are written to a timestamped directory under `test-results/extension/` (ignored by Git). These screenshots are
+failure/debugging evidence, not approved visual regression baselines.
+
+The pinned VS Code version covers the extension’s minimum supported release line.
+Upgrade the version in `tests/extension/run.ts` deliberately and rerun the suite.
+Browser screenshot comparisons, the broader theme/resize/accessibility matrix, and
+CI enforcement are separate follow-up milestones; the manual checks above still apply.

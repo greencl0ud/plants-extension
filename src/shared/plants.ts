@@ -41,8 +41,10 @@ export const plantArtworkBounds: Record<PlantId, { left: number; top: number; ri
 };
 
 export type WebviewMessage = { type: 'ready' } | { type: 'addPlant' | 'feedPlant'; plantId: PlantId };
+export type FeedRejection = 'noFood' | 'alreadyThriving' | 'notOwned';
 export type ShelfMessage =
-  | { type: 'shelfState'; plants: SavedPlant[]; care?: CareSummary; fedPlantId?: PlantId }
+  | { type: 'shelfState'; plants: SavedPlant[]; care?: CareSummary }
+  | { type: 'feedResult'; plantId: PlantId; outcome: 'fed' | FeedRejection }
   | { type: 'earningError' }
   | { type: 'saveError' };
 
@@ -93,9 +95,11 @@ export function isSavedShelf(value: unknown): value is SavedPlant[] {
 export function isShelfMessage(value: unknown): value is ShelfMessage {
   if (typeof value !== 'object' || value === null || !('type' in value)) return false;
   return value.type === 'saveError' || value.type === 'earningError'
+    || (value.type === 'feedResult' && 'plantId' in value && isPlantId(value.plantId)
+      && 'outcome' in value && typeof value.outcome === 'string'
+      && ['fed', 'noFood', 'alreadyThriving', 'notOwned'].includes(value.outcome))
     || (value.type === 'shelfState' && 'plants' in value && isSavedShelf(value.plants)
-      && (!('care' in value) || isCareSummary(value.care))
-      && (!('fedPlantId' in value) || isPlantId(value.fedPlantId)));
+      && (!('care' in value) || isCareSummary(value.care)));
 }
 
 export interface CareSummary {

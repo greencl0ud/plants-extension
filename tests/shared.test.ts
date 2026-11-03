@@ -64,5 +64,17 @@ it('validates care messages and counters at the webview boundary', () => {
   expect(isShelfMessage(state)).toBe(true);
   expect(isShelfMessage({ ...state, care: { ...state.care, food: -1 } })).toBe(false);
   expect(isShelfMessage({ ...state, care: { ...state.care, editingMinutes: 5 } })).toBe(false);
-  expect(isShelfMessage({ ...state, fedPlantId: 'dangleleaf' })).toBe(false);
+  expect(isShelfMessage({ type: 'feedResult', plantId: 'dangleleaf', outcome: 'fed' })).toBe(false);
+});
+
+it('validates feeding result identities and outcomes', () => {
+  for (const outcome of ['fed', 'noFood', 'alreadyThriving', 'notOwned']) {
+    expect(isShelfMessage({ type: 'feedResult', plantId: 'stringle', outcome })).toBe(true);
+  }
+  for (const value of [
+    { type: 'feedResult', plantId: 'stringle' },
+    { type: 'feedResult', plantId: 'stringle', outcome: 'unknown' },
+    { type: 'feedResult', plantId: 'dangleleaf', outcome: 'fed' },
+    { type: 'feedResult', outcome: 'fed' },
+  ]) expect(isShelfMessage(value)).toBe(false);
 });
